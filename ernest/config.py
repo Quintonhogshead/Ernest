@@ -57,7 +57,14 @@ def _split(value: str | None) -> tuple[str, ...]:
 
 
 def load() -> Config:
-    load_dotenv()
+    # Honor ERNEST_ENV_PATH so jobs read the same .env the dashboard writes
+    # (e.g. a mounted volume at /data/.env on Fly.io). Falls back to the default
+    # search (a .env in the working directory) for local runs.
+    env_path = os.environ.get("ERNEST_ENV_PATH")
+    if env_path:
+        load_dotenv(env_path)
+    else:
+        load_dotenv()
     g = os.environ.get
     return Config(
         triage_model=g("ERNEST_TRIAGE_MODEL") or "anthropic:claude-haiku-4-5",

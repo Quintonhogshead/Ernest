@@ -63,6 +63,19 @@ def test_config_load_defaults(monkeypatch):
     assert cfg.paused is False
 
 
+def test_config_honors_env_path(monkeypatch, tmp_path):
+    # Jobs must read the same .env the dashboard writes (e.g. /data/.env on Fly).
+    import os
+    env_file = os.path.join(tmp_path, "custom.env")
+    open(env_file, "w").write("ERNEST_DISCORD_TOKEN=abc\nERNEST_DISCORD_USER_ID=42\n")
+    for k in ("ERNEST_DISCORD_TOKEN", "ERNEST_DISCORD_USER_ID"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("ERNEST_ENV_PATH", env_file)
+    cfg = load()
+    assert cfg.discord_token == "abc"
+    assert cfg.discord_user_id == "42"
+
+
 def test_config_accounts_split(monkeypatch):
     monkeypatch.setattr("ernest.config.load_dotenv", lambda *a, **k: False)
     monkeypatch.setenv("ERNEST_ACCOUNTS", "work, school ,business")
