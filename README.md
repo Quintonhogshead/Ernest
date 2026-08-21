@@ -73,6 +73,21 @@ python -m jobs.ping           # first DM from Ernest
 5. **News** — comma-separated RSS URLs in `ERNEST_NEWS_FEEDS`; edit
    `state/memory/interests.md` to steer scoring.
 
+### Dashboard
+
+A local control panel for entering keys and checking status — no config file
+editing by hand:
+
+```bash
+python -m dashboard.app        # http://127.0.0.1:8787 (localhost, no password)
+```
+
+It edits `.env`, shows which keys are set (never displaying secret values), and
+has buttons to run read-only dry-runs. To reach it from anywhere, deploy it to
+Fly.io behind a password over HTTPS — see [DEPLOY-FLY.md](DEPLOY-FLY.md). It
+**fails closed**: on any non-localhost host it refuses to start without
+`ERNEST_DASHBOARD_PASSWORD`.
+
 ### Scheduling
 
 See [ops/README.md](ops/README.md) for the launchd templates (triage every 15

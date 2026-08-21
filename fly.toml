@@ -1,0 +1,35 @@
+# Fly.io config for the Ernest dashboard.
+# Rename `app` to something unique, then follow DEPLOY-FLY.md.
+app = "ernest-dashboard"
+primary_region = "iad"   # pick one near you: fly platform regions
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ERNEST_ENV_PATH = "/data/.env"
+  ERNEST_DB_PATH = "/data/ernest.db"
+  PORT = "8080"
+
+# Persistent volume: your keys and library live here, not in the image.
+[mounts]
+  source = "ernest_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true          # always redirect to HTTPS
+  auto_stop_machines = "stop" # scale to zero when idle (cheap)
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -10,7 +10,9 @@ from __future__ import annotations
 import os
 import sqlite3
 
-DB_PATH = os.path.join("state", "ernest.db")
+# Honor ERNEST_DB_PATH so the app can point at a mounted volume (e.g. on Fly.io);
+# defaults to a local file for laptop runs.
+DB_PATH = os.environ.get("ERNEST_DB_PATH") or os.path.join("state", "ernest.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS seen (
