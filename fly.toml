@@ -1,7 +1,7 @@
 # Fly.io config for the Ernest dashboard.
 # Rename `app` to something unique, then follow DEPLOY-FLY.md.
-app = "ernest-dashboard"
-primary_region = "iad"   # pick one near you: fly platform regions
+app = "ernest-dash-qh"
+primary_region = "dfw"   # Dallas — closest Fly region to Austin
 
 [build]
   dockerfile = "Dockerfile"
