@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ernest.triage</string>
+  <key>WorkingDirectory</key><string>__ERNEST_DIR__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>-m</string>
+    <string>jobs.triage</string>
+  </array>
+  <key>StartInterval</key><integer>900</integer>
+  <key>StandardOutPath</key><string>__ERNEST_DIR__/logs/launchd-triage.log</string>
+  <key>StandardErrorPath</key><string>__ERNEST_DIR__/logs/launchd-triage.log</string>
+</dict>
+</plist>

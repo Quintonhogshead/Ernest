@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.ernest.news</string>
+  <key>WorkingDirectory</key><string>__ERNEST_DIR__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>-m</string>
+    <string>jobs.news</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>5</integer></dict>
+  <key>StandardOutPath</key><string>__ERNEST_DIR__/logs/launchd-news.log</string>
+  <key>StandardErrorPath</key><string>__ERNEST_DIR__/logs/launchd-news.log</string>
+</dict>
+</plist>

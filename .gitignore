@@ -1,0 +1,24 @@
+# Secrets & credentials
+.env
+token_*.json
+credentials.json
+state/google/
+state/discord_dm_channel.txt
+
+# Local state (keep the committed seed files under state/memory/)
+state/ernest.db
+state/ernest.db-*
+state/tmp/
+logs/*.jsonl
+logs/*.log
+
+# Generated research briefings (private)
+research/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.DS_Store
