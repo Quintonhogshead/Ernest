@@ -10,11 +10,12 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
-from ernest import chan, gmail, library, triage
+from ernest import chan, library, mail, triage
 from ernest.audit import log_event
 from ernest.config import load
 from ernest.gmail import GmailAuthError
 from ernest.guard import halt_if_paused
+from ernest.outlook import OutlookAuthError
 from ernest.store import connect, mark_seen
 
 _ORDER = ["urgent", "needs_reply", "needs_action", "fyi", "newsletter", "cold",
@@ -57,26 +58,29 @@ def main() -> None:
     urgent_msgs: list[str] = []
     counts: dict[str, int] = {}
 
-    for account in cfg.accounts:
+    for provider, account in mail.accounts(cfg):
         try:
-            messages = gmail.unread(cfg, account, max_results=args.limit)
-        except GmailAuthError as exc:
-            print(f"[{account}] {exc}")
-            log_event("triage", "gmail_auth_error", {"account": account, "error": str(exc)})
+            messages = mail.unread(cfg, provider, account, max_results=args.limit)
+        except (GmailAuthError, OutlookAuthError) as exc:
+            print(f"[{provider}:{account}] {exc}")
+            log_event("triage", "auth_error",
+                      {"provider": provider, "account": account, "error": str(exc)})
             continue
+        label = f"{provider}:{account}"
         new = 0
         for msg in messages:
-            if not mark_seen(conn, "gmail", msg["id"]):
+            if not mark_seen(conn, provider, msg["id"]):
                 continue
             new += 1
             result = triage.classify(cfg, msg)
             _record(conn, cfg, msg, result)
             line = f"• {msg['sender'][:40]} — {result['summary']}"
-            grouped.setdefault(account, {}).setdefault(result["category"], []).append(line)
+            grouped.setdefault(label, {}).setdefault(result["category"], []).append(line)
             if result.get("urgent"):
-                urgent_msgs.append(f"⚠️ [{account}] {msg['sender'][:40]}\n{result['summary']}")
-        counts[account] = new
-        log_event("triage", "account_done", {"account": account, "new": new})
+                urgent_msgs.append(f"⚠️ [{label}] {msg['sender'][:40]}\n{result['summary']}")
+        counts[label] = new
+        log_event("triage", "account_done",
+                  {"provider": provider, "account": account, "new": new})
 
     for u in urgent_msgs:
         if args.dry_run:

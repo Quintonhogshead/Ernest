@@ -60,15 +60,34 @@ python -m jobs.ping           # first DM from Ernest
    token into `ERNEST_DISCORD_TOKEN`. Invite the bot to a private server you're in
    (it can only DM users it shares a server with). Enable Developer Mode in
    Discord, copy your own user ID into `ERNEST_DISCORD_USER_ID`.
-2. **Canvas** — Account → Settings → *New Access Token* → `CANVAS_TOKEN`; set
-   `CANVAS_BASE_URL` to `https://<your-school>.instructure.com`.
-3. **Gmail** — create a Desktop-app OAuth client (Gmail API enabled), save it as
-   `state/google/credentials.json`, then authorize each account read-only:
-   ```bash
-   python scripts/authorize.py work
-   python scripts/authorize.py school
-   python scripts/authorize.py business
+2. **Canvas** (optional) — Account → Settings → *New Access Token* →
+   `CANVAS_TOKEN`; set `CANVAS_BASE_URL` to `https://<your-school>.instructure.com`.
+   Skip this and the `canvas_sync` job simply won't run.
+3. **Mail accounts** — `ERNEST_ACCOUNTS` is a comma-separated list of
+   `provider:name` entries; providers are `gmail` and `outlook`. Example for two
+   of each:
    ```
+   ERNEST_ACCOUNTS=gmail:work,gmail:personal,outlook:business,outlook:school
+   ```
+   - **Gmail** — create one Desktop-app OAuth client (Gmail API enabled), save it
+     as `state/google/credentials.json`, then authorize each Gmail account
+     read-only:
+     ```bash
+     python scripts/authorize.py gmail work
+     python scripts/authorize.py gmail personal
+     ```
+   - **Outlook / Microsoft 365** — register a **public client** app in the
+     [Azure/Entra portal](https://entra.microsoft.com) (App registrations → New):
+     set "Allow public client flows" = Yes, add the delegated **`Mail.Read`**
+     permission, and copy the **Application (client) ID** into `MS_CLIENT_ID`
+     (leave `MS_TENANT=common` for personal/multi-tenant). Then authorize each
+     Outlook account with the device-code flow:
+     ```bash
+     python scripts/authorize.py outlook business   # prints a URL + code to enter
+     python scripts/authorize.py outlook school
+     ```
+   All four token files land in `state/google/` (`token_*.json` for Gmail,
+   `ms_token_*.json` for Outlook) and are git-ignored.
 4. **Models** — `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY`.
 5. **News** — comma-separated RSS URLs in `ERNEST_NEWS_FEEDS`; edit
    `state/memory/interests.md` to steer scoring.

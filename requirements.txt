@@ -4,6 +4,7 @@ openai>=1.40
 google-api-python-client>=2.100
 google-auth>=2.30
 google-auth-oauthlib>=1.2
+msal>=1.28
 requests>=2.31
 feedparser>=6.0
 python-dotenv>=1.0

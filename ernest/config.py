@@ -35,9 +35,11 @@ class Config:
     # canvas
     canvas_base_url: str | None = None
     canvas_token: str | None = None
-    # gmail
+    # mail
     google_credentials_dir: str = "./state/google"
     accounts: tuple[str, ...] = ()
+    ms_client_id: str | None = None
+    ms_tenant: str = "common"
     # news
     news_feeds: tuple[str, ...] = ()
     # library / research
@@ -79,6 +81,8 @@ def load() -> Config:
         canvas_token=g("CANVAS_TOKEN") or None,
         google_credentials_dir=g("GOOGLE_CREDENTIALS_DIR") or "./state/google",
         accounts=_split(g("ERNEST_ACCOUNTS")),
+        ms_client_id=g("MS_CLIENT_ID") or None,
+        ms_tenant=g("MS_TENANT") or "common",
         news_feeds=_split(g("ERNEST_NEWS_FEEDS")),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
