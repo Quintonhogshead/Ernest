@@ -11,6 +11,7 @@ primary_region = "dfw"   # Dallas — closest Fly region to Austin
   ERNEST_DB_PATH = "/data/ernest.db"
   GOOGLE_CREDENTIALS_DIR = "/data/google"   # mail OAuth tokens live on the volume
   ERNEST_RUN_SCHEDULER = "1"                # run triage/briefs/canvas/news in-process
+  ERNEST_RUN_BOT = "1"                      # run the interactive Discord bot in-process
   ERNEST_TZ = "America/Chicago"             # brief times are local to Austin
   PORT = "8080"
 

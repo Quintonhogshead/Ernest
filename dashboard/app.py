@@ -385,6 +385,12 @@ def main() -> None:
         start_background(ROOT)
         print("⏱️  scheduler started (triage + briefs + canvas + news)")
 
+    if os.environ.get("ERNEST_RUN_BOT"):
+        from ernest.bot import start_background as start_bot
+
+        start_bot()
+        print("💬 interactive Discord bot started (ask / research / status)")
+
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     where = "localhost only" if is_local else f"{args.host} · password-protected"
     print(f"🎩 Ernest dashboard → http://{args.host}:{args.port}  ({where}; Ctrl-C to stop)")
