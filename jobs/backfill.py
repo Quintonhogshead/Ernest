@@ -16,7 +16,7 @@ import argparse
 from ernest import library, mail
 from ernest.audit import log_event
 from ernest.config import load
-from ernest.store import connect, mark_seen
+from ernest.store import connect
 
 
 def main() -> None:
@@ -37,8 +37,9 @@ def main() -> None:
             continue
         added = 0
         for m in msgs:
-            if not mark_seen(conn, f"backfill-{provider}", m["id"]):
-                continue
+            # No local seen-gate: the library backend dedups by content
+            # fingerprint, so this stays correct across backend switches and
+            # re-runs (already-stored messages return 0).
             n = library.add_document(
                 conn, cfg, f"{provider}:{account}",
                 f"{m.get('subject','')} — {m.get('sender','')}", m.get("body_text", ""),
