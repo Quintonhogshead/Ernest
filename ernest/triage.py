@@ -62,6 +62,23 @@ def _wrap_text(msg: dict) -> str:
     )
 
 
+def priority_reason(cfg: Config, msg: dict) -> str | None:
+    """Return a reason string if this message should always ping, else None.
+
+    Deterministic (no model): matches configured senders (substring — so a full
+    address or a bare domain both work) and keywords (in subject or body).
+    """
+    sender = (msg.get("sender") or "").lower()
+    for s in cfg.priority_senders:
+        if s.lower() in sender:
+            return f"from {s}"
+    haystack = ((msg.get("subject") or "") + " " + (msg.get("body_text") or msg.get("text") or "")).lower()
+    for kw in cfg.priority_keywords:
+        if kw.lower() in haystack:
+            return f'mentions "{kw}"'
+    return None
+
+
 def classify(cfg: Config, msg: dict, kind: str = "email") -> dict:
     """Classify a message. Falls back to needs_review on model failure."""
     user = _wrap_text(msg) if kind == "text" else _wrap_email(msg)

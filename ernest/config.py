@@ -43,6 +43,9 @@ class Config:
     ms_tenant: str = "common"
     # news
     news_feeds: tuple[str, ...] = ()
+    # priority alerts — always ping on these, regardless of the model's judgment
+    priority_senders: tuple[str, ...] = ()
+    priority_keywords: tuple[str, ...] = ()
     # library / research
     ingest: bool = True
     research_budget_usd: float = 5.0
@@ -86,6 +89,8 @@ def load() -> Config:
         ms_client_id=g("MS_CLIENT_ID") or None,
         ms_tenant=g("MS_TENANT") or "common",
         news_feeds=_split(g("ERNEST_NEWS_FEEDS")),
+        priority_senders=_split(g("ERNEST_PRIORITY_SENDERS")),
+        priority_keywords=_split(g("ERNEST_PRIORITY_KEYWORDS")),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
         lat=g("ERNEST_LAT") or None,

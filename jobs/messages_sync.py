@@ -44,10 +44,14 @@ def main() -> None:
             continue
         new += 1
         result = triage.classify(cfg, m, kind="text")
+        reason = triage.priority_reason(cfg, m)
+        if reason:
+            result["urgent"] = True
         entry = f"• {m['sender']} — {result['summary']}"
         lines.append(entry)
         if result.get("urgent"):
-            urgent.append(f"⚠️ (text) {m['sender']}\n{result['summary']}")
+            tag = "⭐ Priority (text)" if reason else "⚠️ (text)"
+            urgent.append(f"{tag} {m['sender']}\n{result['summary']}" + (f"\n_{reason}_" if reason else ""))
 
     for u in urgent:
         if args.dry_run:

@@ -73,11 +73,18 @@ def main() -> None:
                 continue
             new += 1
             result = triage.classify(cfg, msg)
+            reason = triage.priority_reason(cfg, msg)
+            if reason:
+                result["urgent"] = True  # your priority list overrides the model
             _record(conn, cfg, msg, result)
             line = f"• {msg['sender'][:40]} — {result['summary']}"
             grouped.setdefault(label, {}).setdefault(result["category"], []).append(line)
             if result.get("urgent"):
-                urgent_msgs.append(f"⚠️ [{label}] {msg['sender'][:40]}\n{result['summary']}")
+                tag = "⭐ Priority" if reason else "⚠️ Urgent"
+                extra = f"\n_{reason}_" if reason else ""
+                urgent_msgs.append(
+                    f"{tag} [{label}] {msg['sender'][:40]}\n{result['summary']}{extra}"
+                )
         counts[label] = new
         log_event("triage", "account_done",
                   {"provider": provider, "account": account, "new": new})
