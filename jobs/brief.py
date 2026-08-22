@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta, timezone
 
-from ernest import chan, weather
+from ernest import chan, voice, weather
 from ernest.audit import log_event, read_events
 from ernest.config import load
 from ernest.guard import halt_if_paused
@@ -38,18 +38,30 @@ def morning(cfg) -> str:
 
     stamp = datetime.now(timezone.utc).strftime("%A, %b %d")
     out = [f"**🎩 Morning brief — {stamp}**"]
+    facts = [f"Date: {stamp}."]
     w = weather.one_liner(cfg)
     if w:
         out.append(f"🌤️ {w}")
+        facts.append(f"Weather: {w}")
     if due:
         out.append("\n__Due within 72h__")
         out.extend(f"• {d['due_at'][:10]} — {d['title']} ({d['course'] or ''})" for d in due)
+        facts.append("Coursework due within 72h:")
+        facts.extend(f"- {d['due_at'][:10]}: {d['title']} ({d['course'] or 'course n/a'})"
+                     for d in due)
     if counts:
         out.append("\n__Unread, by type__")
         out.extend(f"• {c['category']}: {c['n']}" for c in counts)
+        facts.append("Today's unread mail by category: "
+                     + ", ".join(f"{c['n']} {c['category']}" for c in counts))
     if len(out) == 1:
         out.append("_Quiet start — nothing flagged._")
-    return "\n".join(out)
+        facts.append("Nothing is flagged — a quiet start.")
+    return voice.compose(
+        cfg,
+        f"Write Quinton's morning brief for {stamp} — his day at a glance.",
+        "\n".join(facts), "\n".join(out),
+    )
 
 
 def evening(cfg) -> str:
@@ -69,15 +81,27 @@ def evening(cfg) -> str:
 
     stamp = datetime.now(timezone.utc).strftime("%A, %b %d")
     out = [f"**🌙 Evening wrap — {stamp}**"]
+    facts = [f"Date: {stamp}."]
     if by_action:
         out.append("\n__What I did today__")
         out.extend(f"• {k}: {v}" for k, v in sorted(by_action.items()))
+        facts.append("What I handled today (job.action: count): "
+                     + ", ".join(f"{k} {v}" for k, v in sorted(by_action.items())))
     if flagged:
         out.append("\n__Still wants you__")
         out.extend(f"• [{f['account']}] {f['sender'][:35]} — {f['summary']}" for f in flagged)
+        facts.append("Still needs your attention:")
+        facts.extend(f"- [{f['account']}] {f['sender'][:40]}: {f['summary']} "
+                     f"({f['category']})" for f in flagged)
     if len(out) == 1:
         out.append("_Nothing logged today._")
-    return "\n".join(out)
+        facts.append("Nothing was logged today.")
+    return voice.compose(
+        cfg,
+        f"Write Quinton's evening wrap for {stamp} — what you handled and what "
+        "still needs him.",
+        "\n".join(facts), "\n".join(out),
+    )
 
 
 def main() -> None:

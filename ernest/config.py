@@ -18,13 +18,18 @@ except Exception:  # pragma: no cover - trivial import guard
     def load_dotenv(*_a, **_k):  # type: ignore
         return False
 
+# Quinton's standing default for every generative model ("Luna"). Still just a
+# default: any ERNEST_*_MODEL env var overrides it. Embeddings are excluded —
+# Luna is a chat model and can't embed.
+_LUNA = "openai:gpt-5.6-luna"
+
 
 @dataclass(frozen=True)
 class Config:
-    # models
-    triage_model: str = "anthropic:claude-haiku-4-5"
-    ask_model: str = "anthropic:claude-sonnet-5"
-    research_model: str = "anthropic:claude-opus-5"
+    # models — default to Luna; override any of them with ERNEST_*_MODEL
+    triage_model: str = _LUNA
+    ask_model: str = _LUNA
+    research_model: str = _LUNA
     embed_model: str = "openai:text-embedding-3-small"
     # keys
     anthropic_api_key: str | None = None
@@ -64,6 +69,9 @@ class Config:
     # weather
     lat: str | None = None
     lon: str | None = None
+    # voice: LLM composes user-facing messages as plain English (else raw templates)
+    voice: bool = True
+    voice_model: str | None = None  # falls back to triage_model when unset
     # kill switch
     paused: bool = False
 
@@ -85,9 +93,9 @@ def load() -> Config:
         load_dotenv()
     g = os.environ.get
     return Config(
-        triage_model=g("ERNEST_TRIAGE_MODEL") or "anthropic:claude-haiku-4-5",
-        ask_model=g("ERNEST_ASK_MODEL") or "anthropic:claude-sonnet-5",
-        research_model=g("ERNEST_RESEARCH_MODEL") or "anthropic:claude-opus-5",
+        triage_model=g("ERNEST_TRIAGE_MODEL") or _LUNA,
+        ask_model=g("ERNEST_ASK_MODEL") or _LUNA,
+        research_model=g("ERNEST_RESEARCH_MODEL") or _LUNA,
         embed_model=g("ERNEST_EMBED_MODEL") or "openai:text-embedding-3-small",
         anthropic_api_key=g("ANTHROPIC_API_KEY") or None,
         openai_api_key=g("OPENAI_API_KEY") or None,
@@ -116,6 +124,8 @@ def load() -> Config:
         rerank_candidates=int(g("ERNEST_RERANK_CANDIDATES") or "30"),
         lat=g("ERNEST_LAT") or None,
         lon=g("ERNEST_LON") or None,
+        voice=(g("ERNEST_VOICE") or "1") != "0",
+        voice_model=g("ERNEST_VOICE_MODEL") or None,
         paused=bool(g("ERNEST_PAUSED")),
     )
 

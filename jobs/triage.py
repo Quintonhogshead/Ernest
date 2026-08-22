@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
-from ernest import chan, draft, library, mail, triage
+from ernest import chan, draft, library, mail, triage, voice
 from ernest.audit import log_event
 from ernest.config import load
 from ernest.gmail import GmailAuthError
@@ -85,9 +85,16 @@ def main() -> None:
             if result.get("urgent"):
                 tag = "⭐ Priority" if reason else "⚠️ Urgent"
                 extra = f"\n_{reason}_" if reason else ""
-                urgent_msgs.append(
+                fallback = (
                     f"{tag} [{label}] {msg['sender'][:40]}\n{result['summary']}{extra}"
                 )
+                facts = (
+                    f"Urgent email in {label} from {msg['sender'][:60]}.\n"
+                    f"Subject: {msg['subject'][:100]}\n"
+                    f"What it's about: {result['summary']}"
+                    + (f"\nWhy it's flagged urgent: {reason}" if reason else "")
+                )
+                urgent_msgs.append((facts, fallback))
             if (cfg.draft_replies and result["category"] == "needs_reply"
                     and drafts_made < cfg.draft_max):
                 try:
@@ -106,27 +113,70 @@ def main() -> None:
         log_event("triage", "account_done",
                   {"provider": provider, "account": account, "new": new})
 
-    for u in urgent_msgs:
+    for facts, fallback in urgent_msgs:
+        u = voice.compose(
+            cfg,
+            "Give Quinton a heads-up about this one urgent email, in a sentence "
+            "or two — enough to know what it is and why it can't wait.",
+            facts, fallback,
+        )
         if args.dry_run:
             print(u + "\n")
         else:
             chan.send(cfg, u)
 
+    # Drafts carry the actual reply text as the deliverable — sent verbatim, never
+    # rewritten by the voice layer.
     for d in draft_msgs:
         if args.dry_run:
             print(d + "\n")
         else:
             chan.send(cfg, d)
 
-    digest = _format(grouped, cfg)
-    if not digest:
+    fallback = _format(grouped, cfg)
+    if not fallback:
         print("nothing new to triage.")
         return
+    digest = voice.compose(
+        cfg,
+        "Summarize Quinton's new mail across his accounts — what needs him and "
+        "what you filed away. Keep it brief.",
+        _digest_facts(grouped, cfg), fallback,
+    )
     if args.dry_run:
         print(digest)
     else:
         chan.send(cfg, digest)
     log_event("triage", "digest_sent", {"counts": counts, "dry_run": args.dry_run})
+
+
+def _digest_facts(grouped: dict, cfg) -> str:
+    """Plain-text facts for the voice layer: same show/file policy as _format,
+    but as labeled data (no emoji/markup) for the model to narrate."""
+    show = set(cfg.digest_categories)
+    lines: list[str] = []
+    filed: dict[str, int] = {}
+    for account, cats in grouped.items():
+        actionable: list[str] = []
+        for cat in _ORDER:
+            if cat not in cats:
+                continue
+            if cat in show:
+                name = _LABELS[cat].split(" ", 1)[-1].lower()
+                for item in cats[cat]:
+                    actionable.append(f"  - ({name}) {item.lstrip('• ').strip()}")
+            else:
+                filed[cat] = filed.get(cat, 0) + len(cats[cat])
+        if actionable:
+            lines.append(f"Account {account} — needs attention:")
+            lines.extend(actionable)
+    if filed:
+        tally = ", ".join(f"{n} {_LABELS[c].split(' ', 1)[-1].lower()}"
+                          for c, n in filed.items())
+        lines.append(f"Filed quietly (no action needed): {tally}.")
+    if not any(a.startswith("Account") for a in lines):
+        lines.insert(0, "Nothing needs you this round.")
+    return "\n".join(lines)
 
 
 def _format(grouped: dict, cfg) -> str:

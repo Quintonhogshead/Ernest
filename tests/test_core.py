@@ -57,8 +57,9 @@ def test_config_load_defaults(monkeypatch):
             monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr("ernest.config.load_dotenv", lambda *a, **k: False)
     cfg = load()
-    assert cfg.triage_model == "anthropic:claude-haiku-4-5"
-    assert cfg.embed_model.startswith("openai:")
+    assert cfg.triage_model == "openai:gpt-5.6-luna"  # Luna is the default everywhere
+    assert cfg.ask_model == cfg.research_model == cfg.triage_model
+    assert cfg.embed_model.startswith("openai:")  # embeddings stay a real embed model
     assert cfg.accounts == ()
     assert cfg.paused is False
 

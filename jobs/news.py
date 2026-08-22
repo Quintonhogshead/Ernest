@@ -11,7 +11,7 @@ import argparse
 import os
 from datetime import datetime, timezone
 
-from ernest import chan, library, news
+from ernest import chan, library, news, voice
 from ernest.audit import log_event
 from ernest.config import load
 from ernest.guard import halt_if_paused
@@ -102,14 +102,22 @@ def main() -> None:
     kept.sort(key=lambda x: x[0], reverse=True)
     stamp = datetime.now(timezone.utc).strftime("%b %d")
     out = [f"**📰 News — {stamp}**"]
+    facts = ["Stories worth his attention (highest interest first):"]
     for _, it in kept:
         out.append(f"• [{it['title']}]({it['link']}) — {it.get('one_liner', '')}")
+        facts.append(f"- [{it['title']}]({it['link']}): {it.get('one_liner', '')}")
         if cfg.ingest:
             library.add_document(
                 conn, cfg, "news", it["title"],
                 f"{it['title']}\n\n{it.get('one_liner','')}\n\n{it['summary']}",
             )
-    digest = "\n".join(out)
+    digest = voice.compose(
+        cfg,
+        "Give Quinton a quick rundown of today's news worth his time. Weave the "
+        "stories into a short brief; keep each story's markdown link "
+        "[title](url) intact so he can click through.",
+        "\n".join(facts), "\n".join(out),
+    )
 
     if args.dry_run:
         print(digest)
