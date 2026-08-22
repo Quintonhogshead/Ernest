@@ -23,8 +23,19 @@ def test_research():
     assert route("research: indie presses") == ("research", "indie presses")
 
 
-def test_freeform_becomes_ask():
-    assert route("what did we tell that author?") == ("ask", "what did we tell that author?")
+def test_freeform_becomes_chat():
+    assert route("what did we tell that author?") == ("chat", "what did we tell that author?")
+    assert route("hey, how's it going?") == ("chat", "hey, how's it going?")
+
+
+def test_ask_stays_library_grounded():
+    # explicit ask is distinct from free-form chat
+    assert route("ask the karli meeting")[0] == "ask"
+
+
+def test_reset():
+    for t in ("reset", "new", "clear", "/reset"):
+        assert route(t)[0] == "reset"
 
 
 def test_empty_is_help():

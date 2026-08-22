@@ -74,6 +74,28 @@ def _openai(cfg: Config):
 
 # ── text completion ──────────────────────────────────────────────────────────
 
+def complete_chat(
+    cfg: Config, model_spec: str, system: str, messages: list[dict], max_tokens: int = 800
+) -> str:
+    """Multi-turn chat. ``messages`` is [{role: user|assistant, content}, …]."""
+    provider, model = parse_spec(model_spec)
+    if provider == "anthropic":
+        client = _anthropic(cfg)
+        resp = client.messages.create(
+            model=model, max_tokens=max_tokens, system=system, messages=messages
+        )
+        return "".join(
+            b.text for b in resp.content if getattr(b, "type", None) == "text"
+        ).strip()
+    client = _openai(cfg)
+    resp = client.chat.completions.create(
+        model=model,
+        max_completion_tokens=max_tokens,
+        messages=[{"role": "system", "content": system}, *messages],
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
 def complete_text(
     cfg: Config, model_spec: str, system: str, user: str, max_tokens: int = 1200
 ) -> str:
