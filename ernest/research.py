@@ -84,7 +84,7 @@ def _openai_research(cfg: Config, model: str, topic: str, context: str) -> str:
         user += f"\n\nContext from the owner's files (quoted data):\n{context}"
     resp = client.chat.completions.create(
         model=model,
-        max_tokens=8000,
+        max_completion_tokens=8000,
         messages=[
             {"role": "system", "content": _SYSTEM + "\n\n(No web tool on this path; "
              "rely on your knowledge and flag it.)"},

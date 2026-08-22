@@ -92,7 +92,7 @@ def complete_text(
     client = _openai(cfg)
     resp = client.chat.completions.create(
         model=model,
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -139,7 +139,7 @@ def complete_json(
             client = _openai(cfg)
             resp = client.chat.completions.create(
                 model=model,
-                max_tokens=max_tokens,
+                max_completion_tokens=max_tokens,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": sys_prompt},
