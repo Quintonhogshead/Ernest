@@ -37,6 +37,8 @@ FIELDS: list[tuple[str, str, str, bool, str]] = [
      "Drafting", False, "1"),
     ("ERNEST_DRAFT_MAX", "Max drafts per triage run", "Drafting", False, "5"),
     ("ERNEST_TRIAGE_LIMIT", "Emails scanned per account per run", "Mail", False, "50"),
+    ("ERNEST_DIGEST_CATEGORIES", "Digest shows these in full (comma-sep); rest filed quietly",
+     "Mail", False, "urgent,needs_reply,needs_action"),
     ("ERNEST_NEWS_FEEDS", "News RSS feeds (comma-sep)", "News", False, "https://…/rss"),
     ("ERNEST_RESEARCH_BUDGET_USD", "Research budget (USD/run)", "Research", False, "5"),
     ("ERNEST_LAT", "Latitude (weather)", "Weather", False, "30.27"),

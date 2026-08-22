@@ -118,7 +118,7 @@ def main() -> None:
         else:
             chan.send(cfg, d)
 
-    digest = _format(grouped)
+    digest = _format(grouped, cfg)
     if not digest:
         print("nothing new to triage.")
         return
@@ -129,18 +129,39 @@ def main() -> None:
     log_event("triage", "digest_sent", {"counts": counts, "dry_run": args.dry_run})
 
 
-def _format(grouped: dict) -> str:
+def _format(grouped: dict, cfg) -> str:
     if not grouped:
         return ""
+    show = set(cfg.digest_categories)
     stamp = datetime.now(timezone.utc).strftime("%b %d")
-    out = [f"**📬 Triage — {stamp}**"]
+    body: list[str] = []
+    filed: dict[str, int] = {}
     for account, cats in grouped.items():
-        out.append(f"\n__{account}__")
+        shown: list[str] = []
         for cat in _ORDER:
-            if cat in cats:
-                out.append(f"{_LABELS[cat]}")
-                out.extend(cats[cat])
-    return "\n".join(out)
+            if cat not in cats:
+                continue
+            if cat in show:
+                shown.append(_LABELS[cat])
+                shown.extend(cats[cat])
+            else:
+                filed[cat] = filed.get(cat, 0) + len(cats[cat])
+        if shown:
+            body.append(f"\n__{account}__")
+            body.extend(shown)
+
+    tally = ", ".join(f"{n} {_LABELS[c].split(' ', 1)[-1].lower()}"
+                      for c, n in filed.items()) if filed else ""
+
+    if body:
+        out = [f"**📬 Triage — {stamp}**", *body]
+        if tally:
+            out.append(f"\n_Filed quietly: {tally}._")
+        return "\n".join(out)
+    # nothing needs you — one quiet line instead of a wall of newsletters
+    if tally:
+        return f"**📬 Triage — {stamp}** · nothing needs you. _Filed: {tally}._"
+    return ""
 
 
 if __name__ == "__main__":

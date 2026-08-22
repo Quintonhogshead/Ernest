@@ -50,6 +50,8 @@ class Config:
     draft_replies: bool = True
     draft_max: int = 5
     triage_limit: int = 50
+    # which categories appear in full in the digest; the rest are filed quietly
+    digest_categories: tuple[str, ...] = ("urgent", "needs_reply", "needs_action")
     # library / research
     ingest: bool = True
     research_budget_usd: float = 5.0
@@ -99,6 +101,8 @@ def load() -> Config:
         draft_replies=(g("ERNEST_DRAFT_REPLIES") or "1") != "0",
         draft_max=int(g("ERNEST_DRAFT_MAX") or "5"),
         triage_limit=int(g("ERNEST_TRIAGE_LIMIT") or "50"),
+        digest_categories=_split(g("ERNEST_DIGEST_CATEGORIES"))
+        or ("urgent", "needs_reply", "needs_action"),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
         database_url=g("DATABASE_URL") or None,
