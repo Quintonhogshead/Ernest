@@ -50,6 +50,10 @@ class Config:
     # (else the first gmail: account with a gcal token); how far ahead to mirror.
     calendar_account: str | None = None
     gcal_sync_days: int = 60
+    # meeting memory: how far back to scan for new Meet transcripts, and how many
+    # minutes before a meeting to send the recap.
+    meet_sync_days: int = 7
+    meet_reminder_lead_min: int = 10
     # news
     news_feeds: tuple[str, ...] = ()
     # priority alerts — always ping on these, regardless of the model's judgment
@@ -114,6 +118,8 @@ def load() -> Config:
         ms_tenant=g("MS_TENANT") or "common",
         calendar_account=g("ERNEST_CALENDAR_ACCOUNT") or None,
         gcal_sync_days=int(g("ERNEST_GCAL_SYNC_DAYS") or "60"),
+        meet_sync_days=int(g("ERNEST_MEET_SYNC_DAYS") or "7"),
+        meet_reminder_lead_min=int(g("ERNEST_MEET_REMINDER_LEAD_MIN") or "10"),
         news_feeds=_split(g("ERNEST_NEWS_FEEDS")),
         priority_senders=_split(g("ERNEST_PRIORITY_SENDERS")),
         priority_keywords=_split(g("ERNEST_PRIORITY_KEYWORDS")),

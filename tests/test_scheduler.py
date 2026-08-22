@@ -11,8 +11,10 @@ def test_interval_job_seeded_then_fires_after_interval():
     # first tick with no state → triage fires immediately
     due = scheduler.due_jobs(t0, last_i, last_d)
     assert any(k == "triage" for k, _ in due)
-    # 5 min later → not yet (interval 15 min)
-    assert scheduler.due_jobs(datetime(2027, 1, 1, 9, 5, 0), last_i, last_d) == []
+    # 5 min later → triage not yet (interval 15 min); other jobs may fire
+    assert "triage" not in [
+        k for k, _ in scheduler.due_jobs(datetime(2027, 1, 1, 9, 5, 0), last_i, last_d)
+    ]
     # 15 min after the last run → fires again
     due2 = scheduler.due_jobs(datetime(2027, 1, 1, 9, 15, 0), last_i, last_d)
     assert any(k == "triage" for k, _ in due2)
@@ -47,6 +49,18 @@ def test_job_argvs_are_module_form():
         assert argv[0] == "-m" and argv[1].startswith("jobs.")
     for _key, argv, _hm in scheduler.DAILY_JOBS:
         assert argv[0] == "-m" and argv[1].startswith("jobs.")
+
+
+def test_meet_jobs_registered():
+    keys = {k for k, _argv, _iv in scheduler.INTERVAL_JOBS}
+    assert {"meet-sync", "meet-reminder"} <= keys
+    last_i, last_d = {}, {}
+    t0 = datetime(2027, 1, 1, 9, 0, 0)
+    fired = {k for k, _ in scheduler.due_jobs(t0, last_i, last_d)}
+    assert {"meet-sync", "meet-reminder"} <= fired
+    # meet-reminder (5 min) fires again at 9:05, meet-sync (30 min) does not
+    at5 = {k for k, _ in scheduler.due_jobs(datetime(2027, 1, 1, 9, 5, 0), last_i, last_d)}
+    assert "meet-reminder" in at5 and "meet-sync" not in at5
 
 
 def test_gcal_sync_registered_and_fires_on_interval():

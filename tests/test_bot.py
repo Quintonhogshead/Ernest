@@ -66,3 +66,11 @@ def test_approve_deny():
     assert route("deny 5") == ("deny", "5")
     assert route("yes 7") == ("approve", "7")
     assert route("cancel 2") == ("deny", "2")
+
+
+def test_meetings_and_search():
+    assert route("meetings")[0] == "meetings"
+    assert route("meeting the Karli sync") == ("meeting_search", "the Karli sync")
+    assert route("recap Social Media Pro") == ("meeting_search", "Social Media Pro")
+    # exact "meetings" must not be swallowed by the "meeting " prefix
+    assert route("meetings")[1] == ""

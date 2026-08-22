@@ -29,6 +29,8 @@ except Exception:  # pragma: no cover
 INTERVAL_JOBS = [
     ("triage", ["-m", "jobs.triage"], 15 * 60),
     ("gcal-sync", ["-m", "jobs.gcal_sync"], 30 * 60),
+    ("meet-sync", ["-m", "jobs.meet_sync"], 30 * 60),
+    ("meet-reminder", ["-m", "jobs.meet_reminder"], 5 * 60),
 ]
 # (key, argv-after-python, (hour, minute))
 DAILY_JOBS = [

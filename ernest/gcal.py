@@ -50,6 +50,21 @@ def _service(cfg: Config, account: str):
     return build("calendar", "v3", credentials=creds, cache_discovery=False)
 
 
+def _meeting_code(raw: dict) -> str:
+    """The Meet meeting code from a calendar event's conferenceData, if any.
+
+    Used to correlate a scheduled event with its Meet conferenceRecord (whose
+    space carries the same code). Falls back to parsing the hangoutLink path.
+    """
+    conf = raw.get("conferenceData") or {}
+    for ep in conf.get("entryPoints", []) or []:
+        code = ep.get("meetingCode")
+        if code:
+            return code
+    link = raw.get("hangoutLink", "") or ""
+    return link.rstrip("/").rsplit("/", 1)[-1] if link else ""
+
+
 def _normalize(raw: dict) -> dict:
     start = raw.get("start", {})
     end = raw.get("end", {})
@@ -60,6 +75,10 @@ def _normalize(raw: dict) -> dict:
         "end": end.get("dateTime") or end.get("date") or "",
         "location": raw.get("location", "") or "",
         "updated": raw.get("updated", ""),
+        "meet_url": raw.get("hangoutLink", "") or "",
+        "meeting_code": _meeting_code(raw),
+        "attendees": [a.get("email", "") for a in raw.get("attendees", []) or []
+                      if a.get("email")],
     }
 
 

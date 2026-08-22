@@ -3,6 +3,7 @@
   python scripts/authorize.py gmail work        # or bare:  authorize.py work
   python scripts/authorize.py outlook job
   python scripts/authorize.py gcal work
+  python scripts/authorize.py gmeet work
 
 Gmail: reads state/google/credentials.json (a Desktop-app OAuth client), runs the
 consent flow with the read-only scope, writes token_<account>.json.
@@ -71,6 +72,27 @@ def _gcal(account: str) -> None:
     print(f"authorized gcal '{account}' (read+write) → {token_file}")
 
 
+def _gmeet(account: str) -> None:
+    from ernest.meet import SCOPES
+
+    cfg = load()
+    client_file = os.path.join(cfg.google_credentials_dir, "credentials.json")
+    if not os.path.exists(client_file):
+        print(f"missing {client_file}")
+        print("Create an OAuth *Desktop app* client in Google Cloud (Google Meet API "
+              "enabled), download it, and save it there as credentials.json.")
+        sys.exit(1)
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    flow = InstalledAppFlow.from_client_secrets_file(client_file, SCOPES)
+    creds = flow.run_local_server(port=0)
+    token_file = os.path.join(cfg.google_credentials_dir, f"gmeet_token_{account}.json")
+    os.makedirs(cfg.google_credentials_dir, exist_ok=True)
+    with open(token_file, "w", encoding="utf-8") as fh:
+        fh.write(creds.to_json())
+    print(f"authorized gmeet '{account}' (read-only transcripts) → {token_file}")
+
+
 def _outlook(account: str) -> None:
     import msal
 
@@ -99,7 +121,7 @@ def _outlook(account: str) -> None:
     print(f"authorized outlook '{account}' (read-only) → {path}")
 
 
-_PROVIDERS = {"gmail": _gmail, "outlook": _outlook, "gcal": _gcal}
+_PROVIDERS = {"gmail": _gmail, "outlook": _outlook, "gcal": _gcal, "gmeet": _gmeet}
 
 
 def main() -> None:
@@ -109,7 +131,7 @@ def main() -> None:
     elif len(args) == 2 and args[0] in _PROVIDERS:
         _PROVIDERS[args[0]](args[1])
     else:
-        print("usage: python scripts/authorize.py [gmail|outlook|gcal] <account-name>")
+        print("usage: python scripts/authorize.py [gmail|outlook|gcal|gmeet] <account-name>")
         sys.exit(1)
 
 

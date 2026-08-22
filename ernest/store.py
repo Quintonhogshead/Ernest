@@ -78,6 +78,19 @@ CREATE TABLE IF NOT EXISTS pending_actions (
   created_at  TEXT NOT NULL,
   decided_at  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS meetings (
+  conference_id       TEXT PRIMARY KEY,
+  account             TEXT,
+  title               TEXT,
+  start_at            TEXT,
+  end_at              TEXT,
+  attendees           TEXT,
+  summary             TEXT,
+  action_items        TEXT,
+  transcript_ingested INTEGER NOT NULL DEFAULT 0,
+  processed_at        TEXT
+);
 """
 
 _FTS = (

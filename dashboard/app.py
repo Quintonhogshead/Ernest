@@ -79,14 +79,14 @@ def _token_files() -> list[str]:
     if not os.path.isdir(d):
         return []
     return sorted(f for f in os.listdir(d)
-                  if f.startswith(("token_", "ms_token_", "gcal_token_"))
+                  if f.startswith(("token_", "ms_token_", "gcal_token_", "gmeet_token_"))
                   and f.endswith(".json"))
 
 
 def _valid_token_name(name: str) -> bool:
     return (
         name.endswith(".json")
-        and name.startswith(("token_", "ms_token_", "gcal_token_"))
+        and name.startswith(("token_", "ms_token_", "gcal_token_", "gmeet_token_"))
         and "/" not in name and "\\" not in name and ".." not in name
     )
 
