@@ -32,9 +32,10 @@ class Config:
     # discord
     discord_token: str | None = None
     discord_user_id: str | None = None
-    # canvas
+    # canvas (API needs a token; ICS feed is the no-token fallback)
     canvas_base_url: str | None = None
     canvas_token: str | None = None
+    canvas_ics_url: str | None = None
     # mail
     google_credentials_dir: str = "./state/google"
     accounts: tuple[str, ...] = ()
@@ -79,6 +80,7 @@ def load() -> Config:
         discord_user_id=g("ERNEST_DISCORD_USER_ID") or None,
         canvas_base_url=(g("CANVAS_BASE_URL") or "").rstrip("/") or None,
         canvas_token=g("CANVAS_TOKEN") or None,
+        canvas_ics_url=g("CANVAS_ICS_URL") or None,
         google_credentials_dir=g("GOOGLE_CREDENTIALS_DIR") or "./state/google",
         accounts=_split(g("ERNEST_ACCOUNTS")),
         ms_client_id=g("MS_CLIENT_ID") or None,

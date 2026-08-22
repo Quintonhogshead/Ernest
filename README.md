@@ -60,9 +60,16 @@ python -m jobs.ping           # first DM from Ernest
    token into `ERNEST_DISCORD_TOKEN`. Invite the bot to a private server you're in
    (it can only DM users it shares a server with). Enable Developer Mode in
    Discord, copy your own user ID into `ERNEST_DISCORD_USER_ID`.
-2. **Canvas** (optional) — Account → Settings → *New Access Token* →
-   `CANVAS_TOKEN`; set `CANVAS_BASE_URL` to `https://<your-school>.instructure.com`.
-   Skip this and the `canvas_sync` job simply won't run.
+2. **Canvas** (optional) — two ways:
+   - **Access token** (preferred, if your school allows it): Account → Settings →
+     *New Access Token* → `CANVAS_TOKEN`; set `CANVAS_BASE_URL` to
+     `https://<your-school>.instructure.com`. Gives due dates + announcements.
+   - **Calendar feed** (no token — for schools like UCF that disable tokens):
+     Canvas → Calendar → *Calendar Feed* (bottom-right) → copy the secret `.ics`
+     URL into `CANVAS_ICS_URL`. Gives assignment due dates (no announcements or
+     grades). Treat the URL as a secret. `canvas_sync` auto-uses whichever is set.
+
+   Skip both and the `canvas_sync` job simply won't run.
 3. **Mail accounts** — `ERNEST_ACCOUNTS` is a comma-separated list of
    `provider:name` entries; providers are `gmail` and `outlook`. Example for two
    of each:
