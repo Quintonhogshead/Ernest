@@ -1,0 +1,20 @@
+name: Deploy to Fly
+
+# Auto-deploy the dashboard/scheduler whenever main changes (a merged PR or a
+# direct push). Needs a FLY_API_TOKEN repo secret (a Fly deploy token).
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    concurrency: deploy-group   # never run two deploys at once
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # --ha=false because the app uses a single volume (one machine attaches it).
+      - run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
