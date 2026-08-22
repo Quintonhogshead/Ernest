@@ -56,6 +56,28 @@ CREATE TABLE IF NOT EXISTS library (
   embedding BLOB,
   ts        TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gcal_mirror (
+  source_key  TEXT PRIMARY KEY,
+  event_id    TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pending_actions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind        TEXT NOT NULL,
+  payload     TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  created_at  TEXT NOT NULL,
+  decided_at  TEXT
+);
 """
 
 _FTS = (
@@ -99,3 +121,17 @@ def mark_seen(conn: sqlite3.Connection, kind: str, external_id: str) -> bool:
         return True
     except sqlite3.IntegrityError:
         return False
+
+
+def get_setting(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    conn.commit()

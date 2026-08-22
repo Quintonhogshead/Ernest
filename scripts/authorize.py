@@ -1,13 +1,18 @@
-"""One-time mail OAuth, run by you (not by any job).
+"""One-time mail/calendar OAuth, run by you (not by any job).
 
   python scripts/authorize.py gmail work        # or bare:  authorize.py work
   python scripts/authorize.py outlook job
+  python scripts/authorize.py gcal work
 
 Gmail: reads state/google/credentials.json (a Desktop-app OAuth client), runs the
 consent flow with the read-only scope, writes token_<account>.json.
 
 Outlook: device-code flow via MSAL with the Mail.Read scope; needs MS_CLIENT_ID
 set (a registered Azure/Entra public client). Writes ms_token_<account>.json.
+
+Gcal: same credentials.json client as Gmail, but its own consent flow with the
+read+write calendar scope, writing a SEPARATE gcal_token_<account>.json — so
+granting calendar access never touches an account's existing Gmail token.
 
 Ernest's jobs only ever read those token files.
 """
@@ -45,6 +50,27 @@ def _gmail(account: str) -> None:
     print(f"authorized gmail '{account}' (read-only) → {token_file}")
 
 
+def _gcal(account: str) -> None:
+    from ernest.gcal import SCOPES
+
+    cfg = load()
+    client_file = os.path.join(cfg.google_credentials_dir, "credentials.json")
+    if not os.path.exists(client_file):
+        print(f"missing {client_file}")
+        print("Create an OAuth *Desktop app* client in Google Cloud (Calendar API "
+              "enabled), download it, and save it there as credentials.json.")
+        sys.exit(1)
+    from google_auth_oauthlib.flow import InstalledAppFlow
+
+    flow = InstalledAppFlow.from_client_secrets_file(client_file, SCOPES)
+    creds = flow.run_local_server(port=0)
+    token_file = os.path.join(cfg.google_credentials_dir, f"gcal_token_{account}.json")
+    os.makedirs(cfg.google_credentials_dir, exist_ok=True)
+    with open(token_file, "w", encoding="utf-8") as fh:
+        fh.write(creds.to_json())
+    print(f"authorized gcal '{account}' (read+write) → {token_file}")
+
+
 def _outlook(account: str) -> None:
     import msal
 
@@ -73,14 +99,17 @@ def _outlook(account: str) -> None:
     print(f"authorized outlook '{account}' (read-only) → {path}")
 
 
+_PROVIDERS = {"gmail": _gmail, "outlook": _outlook, "gcal": _gcal}
+
+
 def main() -> None:
     args = sys.argv[1:]
     if len(args) == 1:  # bare account name → gmail (back-compat)
         _gmail(args[0])
-    elif len(args) == 2 and args[0] in ("gmail", "outlook"):
-        (_gmail if args[0] == "gmail" else _outlook)(args[1])
+    elif len(args) == 2 and args[0] in _PROVIDERS:
+        _PROVIDERS[args[0]](args[1])
     else:
-        print("usage: python scripts/authorize.py [gmail|outlook] <account-name>")
+        print("usage: python scripts/authorize.py [gmail|outlook|gcal] <account-name>")
         sys.exit(1)
 
 

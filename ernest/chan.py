@@ -12,6 +12,7 @@ bot open a DM with a user it shares a guild with.
 from __future__ import annotations
 
 import os
+import re
 import time
 
 import requests
@@ -23,6 +24,27 @@ from .config import Config
 API = "https://discord.com/api/v10"
 _DM_CACHE = os.path.join("state", "discord_dm_channel.txt")
 _LIMIT = 1900  # Discord hard limit is 2000; leave headroom
+
+# Ernest speaks like a person, not a notification feed — no emoji ever reach the
+# wire, whatever the templates or the model produce.
+_EMOJI = re.compile(
+    "[\U0001F000-\U0001FAFF"      # pictographs, symbols, transport, supplemental
+    "\U00002600-\U000027BF"       # misc symbols + dingbats (⚠ ✉ ✍ ❓ …)
+    "\U00002B00-\U00002BFF"       # stars/arrows (⭐ …)
+    "\U0001F1E6-\U0001F1FF"       # regional indicators
+    "\U0000FE00-\U0000FE0F"       # variation selectors
+    "\U00002139\U00002049\U0000203C]+",  # ℹ ⁉ ‼
+    flags=re.UNICODE,
+)
+
+
+def strip_emoji(text: str) -> str:
+    """Remove emoji and tidy the spacing they leave behind."""
+    t = _EMOJI.sub("", text or "")
+    t = re.sub(r"[ \t]{2,}", " ", t)          # collapse gaps from removed emoji
+    t = re.sub(r"(?m)[ \t]+$", "", t)         # trailing spaces per line
+    t = re.sub(r"(?m)^ +", "", t)             # leading spaces from a removed emoji
+    return t.strip()
 
 
 def _headers(cfg: Config) -> dict:
@@ -76,6 +98,7 @@ def send(cfg: Config, text: str) -> bool:
     """DM the owner. Returns True on success; best-effort with one retry."""
     if not cfg.discord_token or not cfg.discord_user_id:
         raise ConfigError("ERNEST_DISCORD_TOKEN and ERNEST_DISCORD_USER_ID required")
+    text = strip_emoji(text)
     try:
         channel_id = _dm_channel_id(cfg)
     except Exception as exc:

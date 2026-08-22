@@ -46,6 +46,10 @@ class Config:
     accounts: tuple[str, ...] = ()
     ms_client_id: str | None = None
     ms_tenant: str = "common"
+    # calendar concierge: which Google account hosts the canonical "Ernest" calendar
+    # (else the first gmail: account with a gcal token); how far ahead to mirror.
+    calendar_account: str | None = None
+    gcal_sync_days: int = 60
     # news
     news_feeds: tuple[str, ...] = ()
     # priority alerts — always ping on these, regardless of the model's judgment
@@ -108,6 +112,8 @@ def load() -> Config:
         accounts=_split(g("ERNEST_ACCOUNTS")),
         ms_client_id=g("MS_CLIENT_ID") or None,
         ms_tenant=g("MS_TENANT") or "common",
+        calendar_account=g("ERNEST_CALENDAR_ACCOUNT") or None,
+        gcal_sync_days=int(g("ERNEST_GCAL_SYNC_DAYS") or "60"),
         news_feeds=_split(g("ERNEST_NEWS_FEEDS")),
         priority_senders=_split(g("ERNEST_PRIORITY_SENDERS")),
         priority_keywords=_split(g("ERNEST_PRIORITY_KEYWORDS")),

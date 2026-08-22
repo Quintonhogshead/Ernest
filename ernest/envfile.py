@@ -29,6 +29,8 @@ FIELDS: list[tuple[str, str, str, bool, str]] = [
     ("GOOGLE_CREDENTIALS_DIR", "Google credentials dir", "Mail", False, "./state/google"),
     ("MS_CLIENT_ID", "Microsoft/Outlook client ID", "Mail", False, "azure app (client) id"),
     ("MS_TENANT", "Microsoft tenant", "Mail", False, "common"),
+    ("ERNEST_CALENDAR_ACCOUNT", "Calendar home account (which gmail hosts the Ernest calendar)",
+     "Calendar", False, "personal"),
     ("ERNEST_PRIORITY_SENDERS", "Always-ping senders (comma-sep: emails or domains)",
      "Priority alerts", False, "boss@company.com, @bigclient.com, agent@lit.com"),
     ("ERNEST_PRIORITY_KEYWORDS", "Always-ping keywords (comma-sep)", "Priority alerts",

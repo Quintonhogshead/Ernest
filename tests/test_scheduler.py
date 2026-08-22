@@ -47,3 +47,17 @@ def test_job_argvs_are_module_form():
         assert argv[0] == "-m" and argv[1].startswith("jobs.")
     for _key, argv, _hm in scheduler.DAILY_JOBS:
         assert argv[0] == "-m" and argv[1].startswith("jobs.")
+
+
+def test_gcal_sync_registered_and_fires_on_interval():
+    assert any(k == "gcal-sync" for k, _argv, _iv in scheduler.INTERVAL_JOBS)
+    last_i, last_d = {}, {}
+    t0 = datetime(2027, 1, 1, 9, 0, 0)
+    assert any(k == "gcal-sync" for k, _ in scheduler.due_jobs(t0, last_i, last_d))
+    # 10 min later → not yet (30 min interval)
+    assert "gcal-sync" not in [
+        k for k, _ in scheduler.due_jobs(datetime(2027, 1, 1, 9, 10, 0), last_i, last_d)
+    ]
+    # 30 min after last run → fires
+    assert any(k == "gcal-sync" for k, _ in
+               scheduler.due_jobs(datetime(2027, 1, 1, 9, 30, 0), last_i, last_d))

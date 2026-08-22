@@ -52,3 +52,17 @@ def test_notes_listing():
 def test_empty_is_help():
     assert route("")[0] == "help"
     assert route("   ")[0] == "help"
+
+
+def test_event_prefixes():
+    assert route("event lunch with Karli Tuesday 1pm") == ("event", "lunch with Karli Tuesday 1pm")
+    assert route("add event dentist Thursday 9am") == ("event", "dentist Thursday 9am")
+    assert route("schedule call with the printer friday") == ("event", "call with the printer friday")
+    assert route("event: book launch Sept 3") == ("event", "book launch Sept 3")
+
+
+def test_approve_deny():
+    assert route("approve 3") == ("approve", "3")
+    assert route("deny 5") == ("deny", "5")
+    assert route("yes 7") == ("approve", "7")
+    assert route("cancel 2") == ("deny", "2")

@@ -23,6 +23,29 @@ def _today_start_iso() -> str:
     return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
+def _today_events(cfg, conn) -> list[dict]:
+    """Today's events on Ernest's canonical calendar; empty if not configured."""
+    from ernest import gcal
+    from ernest.store import get_setting
+
+    calendar_id = get_setting(conn, "gcal_calendar_id")
+    account = cfg.calendar_account
+    if not account:
+        from ernest import mail
+
+        account = next((n for p, n in mail.accounts(cfg)
+                        if p == "gmail" and gcal.has_token(cfg, n)), None)
+    if not calendar_id or not account:
+        return []
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    try:
+        return gcal.list_events(cfg, account, calendar_id, start.isoformat(), end.isoformat())
+    except Exception:
+        return []
+
+
 def morning(cfg) -> str:
     conn = connect()
     horizon = (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat()
@@ -35,6 +58,7 @@ def morning(cfg) -> str:
         "SELECT category, COUNT(*) n FROM messages WHERE triaged_at >= ? "
         "GROUP BY category", (today,)
     ).fetchall()
+    events = _today_events(cfg, conn)
 
     stamp = datetime.now(timezone.utc).strftime("%A, %b %d")
     out = [f"**🎩 Morning brief — {stamp}**"]
@@ -43,6 +67,12 @@ def morning(cfg) -> str:
     if w:
         out.append(f"🌤️ {w}")
         facts.append(f"Weather: {w}")
+    if events:
+        out.append("\n__On your calendar today__")
+        out.extend(f"• {e['start'][11:16] or 'all day'} — {e['title']}" for e in events)
+        facts.append("On the calendar today:")
+        facts.extend(f"- {e['start'][11:16] or 'all day'}: {e['title']}"
+                     + (f" at {e['location']}" if e['location'] else "") for e in events)
     if due:
         out.append("\n__Due within 72h__")
         out.extend(f"• {d['due_at'][:10]} — {d['title']} ({d['course'] or ''})" for d in due)

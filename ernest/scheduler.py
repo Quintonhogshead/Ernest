@@ -28,6 +28,7 @@ except Exception:  # pragma: no cover
 # (key, argv-after-python, interval_seconds)
 INTERVAL_JOBS = [
     ("triage", ["-m", "jobs.triage"], 15 * 60),
+    ("gcal-sync", ["-m", "jobs.gcal_sync"], 30 * 60),
 ]
 # (key, argv-after-python, (hour, minute))
 DAILY_JOBS = [
