@@ -53,6 +53,7 @@ class Config:
     # library / research
     ingest: bool = True
     research_budget_usd: float = 5.0
+    database_url: str | None = None  # set → use Postgres+pgvector; unset → SQLite
     # weather
     lat: str | None = None
     lon: str | None = None
@@ -100,6 +101,7 @@ def load() -> Config:
         triage_limit=int(g("ERNEST_TRIAGE_LIMIT") or "50"),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
+        database_url=g("DATABASE_URL") or None,
         lat=g("ERNEST_LAT") or None,
         lon=g("ERNEST_LON") or None,
         paused=bool(g("ERNEST_PAUSED")),

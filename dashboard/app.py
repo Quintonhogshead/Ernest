@@ -49,6 +49,13 @@ RUNNABLE = {
 
 def _library_count() -> int | None:
     try:
+        from ernest.config import load
+
+        cfg = load()
+        if cfg.database_url:
+            from ernest import pgstore
+
+            return pgstore.count(cfg)
         from ernest.store import connect
 
         db = os.environ.get("ERNEST_DB_PATH") or os.path.join(ROOT, "state", "ernest.db")

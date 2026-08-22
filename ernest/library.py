@@ -56,7 +56,18 @@ def _fingerprint(text: str) -> str:
 def add_document(
     conn: sqlite3.Connection, cfg: Config, source: str, title: str, text: str
 ) -> int:
-    """Ingest one document. Returns chunks added (0 if empty or already seen)."""
+    """Ingest one document. Returns chunks added (0 if empty or already seen).
+
+    Routes to Postgres+pgvector when DATABASE_URL is set, else the SQLite backend.
+    """
+    if cfg.database_url:
+        from . import pgstore
+
+        try:
+            return pgstore.add_document(cfg, source, title, text)
+        except Exception as exc:  # never let a library write break a job
+            log_event("library", "pg_add_failed", {"source": source, "error": str(exc)})
+            return 0
     text = (text or "").strip()
     if not text:
         return 0
@@ -139,7 +150,18 @@ def _semantic_ranked(conn: sqlite3.Connection, cfg: Config, query: str, limit: i
 
 
 def search(conn: sqlite3.Connection, cfg: Config, query: str, k: int = 8) -> list[dict]:
-    """Hybrid search: FTS + semantic, merged by reciprocal-rank fusion."""
+    """Hybrid search: FTS + semantic, merged by reciprocal-rank fusion.
+
+    Routes to Postgres+pgvector when DATABASE_URL is set, else the SQLite backend.
+    """
+    if cfg.database_url:
+        from . import pgstore
+
+        try:
+            return pgstore.search(cfg, query, k)
+        except Exception as exc:
+            log_event("library", "pg_search_failed", {"error": str(exc)})
+            return []
     fused: dict[int, float] = {}
     for ranked in (_fts_ranked(conn, query, 20), _semantic_ranked(conn, cfg, query, 20)):
         for rank, rid in enumerate(ranked):

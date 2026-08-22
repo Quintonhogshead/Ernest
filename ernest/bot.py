@@ -127,7 +127,12 @@ def _status_sync(cfg: Config) -> str:
 
     conn = connect()
     try:
-        lib = conn.execute("SELECT COUNT(*) n FROM library").fetchone()["n"]
+        if cfg.database_url:
+            from ernest import pgstore
+
+            lib = pgstore.count(cfg)
+        else:
+            lib = conn.execute("SELECT COUNT(*) n FROM library").fetchone()["n"]
     except Exception:
         lib = "?"
     accounts = ", ".join(f"{p}:{n}" for p, n in mail.accounts(cfg)) or "none configured"
