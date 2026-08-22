@@ -130,6 +130,7 @@ def run() -> None:
             return
         if message.guild is not None:  # DMs only
             return
+        cfg = load()  # reload each command so dashboard config changes take effect live
         command, arg = route(message.content)
         log_event("bot", "command", {"command": command})
         try:
