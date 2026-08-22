@@ -41,8 +41,9 @@ RUNNABLE = {
     "canvas": ["jobs.canvas_sync", "--dry-run"],
     "news": ["jobs.news", "--dry-run"],
     "brief": ["jobs.brief", "morning", "--dry-run"],
-    "backfill": ["jobs.backfill", "--limit", "40"],
+    "backfill": ["jobs.backfill", "--limit", "200"],
 }
+BACKGROUND_JOBS = {"backfill"}  # run detached, not bound to the HTTP window
 
 
 # ── status helpers ───────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ Present here: {tokens_present}</p>
 <button class="ghost" onclick="run(event,'canvas')">Canvas</button>
 <button class="ghost" onclick="run(event,'news')">News</button>
 <button class="ghost" onclick="run(event,'brief')">Morning brief</button>
-<button class="ghost" onclick="run(event,'backfill')">Backfill library (40/acct)</button>
+<button class="ghost" onclick="run(event,'backfill')">Backfill library (200/acct, background)</button>
 </div>
 <pre id="out">output appears here…</pre>
 <h2 style="margin-top:1.2rem">Recent activity</h2>
@@ -360,6 +361,19 @@ class Handler(BaseHTTPRequestHandler):
     def _run(self, job: str) -> dict:
         if job not in RUNNABLE:
             return {"error": f"unknown job: {job}"}
+        # Long jobs (backfill) run detached so they aren't bound to the 120s HTTP
+        # window; their progress lands in the audit log / recent activity.
+        if job in BACKGROUND_JOBS:
+            try:
+                subprocess.Popen(
+                    [sys.executable, "-m", *RUNNABLE[job]], cwd=ROOT,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                return {"output": f"Started {job} in the background — watch the "
+                                  "library count / recent activity below."}
+            except Exception as exc:
+                return {"error": str(exc)}
         try:
             proc = subprocess.run(
                 [sys.executable, "-m", *RUNNABLE[job]],
