@@ -46,3 +46,15 @@ def unread(cfg: Config, provider: str, account: str, max_results: int = 25) -> l
 
         return outlook.unread(cfg, account, max_results)
     raise UnknownProvider(f"unknown mail provider: {provider}")
+
+
+def sent(cfg: Config, provider: str, account: str, max_results: int = 12) -> list[dict]:
+    if provider == "gmail":
+        from . import gmail
+
+        return gmail.sent(cfg, account, max_results)
+    if provider == "outlook":
+        from . import outlook
+
+        return outlook.sent(cfg, account, max_results)
+    raise UnknownProvider(f"unknown mail provider: {provider}")

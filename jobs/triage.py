@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
-from ernest import chan, library, mail, triage
+from ernest import chan, draft, library, mail, triage
 from ernest.audit import log_event
 from ernest.config import load
 from ernest.gmail import GmailAuthError
@@ -56,7 +56,9 @@ def main() -> None:
 
     grouped: dict[str, dict[str, list[str]]] = {}
     urgent_msgs: list[str] = []
+    draft_msgs: list[str] = []
     counts: dict[str, int] = {}
+    drafts_made = 0
 
     for provider, account in mail.accounts(cfg):
         try:
@@ -85,6 +87,20 @@ def main() -> None:
                 urgent_msgs.append(
                     f"{tag} [{label}] {msg['sender'][:40]}\n{result['summary']}{extra}"
                 )
+            if (cfg.draft_replies and result["category"] == "needs_reply"
+                    and drafts_made < cfg.draft_max):
+                try:
+                    body = draft.draft_reply(cfg, conn, provider, account, msg)
+                    draft_msgs.append(
+                        f"✍️ **Draft reply** · {label}\n"
+                        f"To: {msg['sender'][:50]} — re: {msg['subject'][:60]}\n\n"
+                        f"{body}\n\n_Copy-paste to send. I did not send it._"
+                    )
+                    drafts_made += 1
+                    log_event("triage", "drafted", {"account": account})
+                except Exception as exc:
+                    log_event("triage", "draft_failed",
+                              {"account": account, "error": str(exc)})
         counts[label] = new
         log_event("triage", "account_done",
                   {"provider": provider, "account": account, "new": new})
@@ -94,6 +110,12 @@ def main() -> None:
             print(u + "\n")
         else:
             chan.send(cfg, u)
+
+    for d in draft_msgs:
+        if args.dry_run:
+            print(d + "\n")
+        else:
+            chan.send(cfg, d)
 
     digest = _format(grouped)
     if not digest:

@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS canvas_items (
   seen_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS voice (
+  account    TEXT PRIMARY KEY,
+  samples    TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS library (
   id        INTEGER PRIMARY KEY,
   source    TEXT NOT NULL,

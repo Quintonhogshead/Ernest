@@ -46,6 +46,9 @@ class Config:
     # priority alerts — always ping on these, regardless of the model's judgment
     priority_senders: tuple[str, ...] = ()
     priority_keywords: tuple[str, ...] = ()
+    # reply drafting (step 1: draft-to-Discord, never auto-sends)
+    draft_replies: bool = True
+    draft_max: int = 5
     # library / research
     ingest: bool = True
     research_budget_usd: float = 5.0
@@ -91,6 +94,8 @@ def load() -> Config:
         news_feeds=_split(g("ERNEST_NEWS_FEEDS")),
         priority_senders=_split(g("ERNEST_PRIORITY_SENDERS")),
         priority_keywords=_split(g("ERNEST_PRIORITY_KEYWORDS")),
+        draft_replies=(g("ERNEST_DRAFT_REPLIES") or "1") != "0",
+        draft_max=int(g("ERNEST_DRAFT_MAX") or "5"),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
         lat=g("ERNEST_LAT") or None,

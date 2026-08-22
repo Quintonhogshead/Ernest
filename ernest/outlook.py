@@ -79,6 +79,23 @@ def _body_text(message: dict) -> str:
     return content[:_BODY_LIMIT] or message.get("bodyPreview", "")
 
 
+def sent(cfg: Config, account: str, max_results: int = 12) -> list[dict]:
+    """Recent messages you've sent — used to learn your writing voice."""
+    token = _access_token(cfg, account)
+    resp = requests.get(
+        f"{GRAPH}/me/mailFolders/sentitems/messages",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"$top": str(max_results), "$select": "subject,body,bodyPreview",
+                "$orderby": "sentDateTime desc"},
+        timeout=20,
+    )
+    if resp.status_code == 401:
+        raise OutlookAuthError(f"Graph rejected the token for {account}; re-authorize")
+    resp.raise_for_status()
+    return [{"subject": m.get("subject", ""), "body_text": _body_text(m)}
+            for m in resp.json().get("value", [])]
+
+
 def unread(cfg: Config, account: str, max_results: int = 25) -> list[dict]:
     token = _access_token(cfg, account)
     headers = {"Authorization": f"Bearer {token}"}
