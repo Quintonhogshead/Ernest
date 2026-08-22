@@ -195,3 +195,19 @@ def _hybrid(conn: sqlite3.Connection, cfg: Config, query: str, k: int) -> list[d
                  "chunk": row["chunk"], "score": round(score, 5)}
             )
     return out
+
+
+def recent_notes(conn: sqlite3.Connection, cfg: Config, n: int = 10) -> list[dict]:
+    """The things Quinton told Ernest to remember, newest first (source='note')."""
+    if cfg.database_url:
+        from . import pgstore
+
+        try:
+            return pgstore.recent_notes(cfg, n)
+        except Exception:
+            return []
+    rows = conn.execute(
+        "SELECT chunk, ts FROM library WHERE source='note' ORDER BY ts DESC LIMIT ?",
+        (n,),
+    ).fetchall()
+    return [{"chunk": r["chunk"], "ts": r["ts"]} for r in rows]

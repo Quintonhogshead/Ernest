@@ -29,11 +29,10 @@ def test_shows_actionable_hides_noise():
     assert "2 newsletter" in out and "1 cold" in out
 
 
-def test_all_noise_gives_one_quiet_line():
+def test_all_noise_stays_silent():
+    # Nothing actionable → no message at all (newsletters don't interrupt).
     grouped = {"gmail:work": {"newsletter": ["• x", "• y", "• z"]}}
-    out = _format(grouped, _cfg())
-    assert "nothing needs you" in out
-    assert out.count("\n") <= 1              # compact, not a wall
+    assert _format(grouped, _cfg()) == ""
 
 
 def test_config_can_widen_categories():

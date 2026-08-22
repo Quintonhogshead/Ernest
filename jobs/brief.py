@@ -54,9 +54,8 @@ def morning(cfg) -> str:
         out.extend(f"• {c['category']}: {c['n']}" for c in counts)
         facts.append("Today's unread mail by category: "
                      + ", ".join(f"{c['n']} {c['category']}" for c in counts))
-    if len(out) == 1:
-        out.append("_Quiet start — nothing flagged._")
-        facts.append("Nothing is flagged — a quiet start.")
+    if not due and not counts:
+        return ""  # nothing to report — stay silent (weather alone isn't news)
     return voice.compose(
         cfg,
         f"Write Quinton's morning brief for {stamp} — his day at a glance.",
@@ -93,9 +92,8 @@ def evening(cfg) -> str:
         facts.append("Still needs your attention:")
         facts.extend(f"- [{f['account']}] {f['sender'][:40]}: {f['summary']} "
                      f"({f['category']})" for f in flagged)
-    if len(out) == 1:
-        out.append("_Nothing logged today._")
-        facts.append("Nothing was logged today.")
+    if not by_action and not flagged:
+        return ""  # nothing happened today — stay silent
     return voice.compose(
         cfg,
         f"Write Quinton's evening wrap for {stamp} — what you handled and what "
@@ -113,6 +111,10 @@ def main() -> None:
     cfg = load()
     halt_if_paused(cfg, "brief")
     text = morning(cfg) if args.mode == "morning" else evening(cfg)
+    if not text:
+        print(f"{args.mode}: nothing to report — staying quiet.")
+        log_event("brief", f"{args.mode}_skipped_empty", {})
+        return
     if args.dry_run:
         print(text)
     else:

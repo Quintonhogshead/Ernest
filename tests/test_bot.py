@@ -38,6 +38,17 @@ def test_reset():
         assert route(t)[0] == "reset"
 
 
+def test_remember():
+    assert route("remember I prefer morning meetings") == ("remember", "I prefer morning meetings")
+    assert route("remember that the venue deposit is $500") == ("remember", "the venue deposit is $500")
+    assert route("note: call the florist") == ("remember", "call the florist")
+
+
+def test_notes_listing():
+    for t in ("notes", "my notes", "/notes"):
+        assert route(t)[0] == "notes"
+
+
 def test_empty_is_help():
     assert route("")[0] == "help"
     assert route("   ")[0] == "help"

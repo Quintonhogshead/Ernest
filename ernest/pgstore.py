@@ -144,3 +144,13 @@ def count(cfg: Config) -> int:
     conn = _get(cfg)
     with _lock:
         return conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+
+
+def recent_notes(cfg: Config, n: int = 10) -> list[dict]:
+    conn = _get(cfg)
+    with _lock:
+        rows = conn.execute(
+            "SELECT chunk, ts FROM documents WHERE source='note' "
+            "ORDER BY ts DESC LIMIT %s", (n,)
+        ).fetchall()
+    return [{"chunk": r[0], "ts": str(r[1])} for r in rows]

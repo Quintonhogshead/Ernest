@@ -208,9 +208,8 @@ def _format(grouped: dict, cfg) -> str:
         if tally:
             out.append(f"\n_Filed quietly: {tally}._")
         return "\n".join(out)
-    # nothing needs you — one quiet line instead of a wall of newsletters
-    if tally:
-        return f"**📬 Triage — {stamp}** · nothing needs you. _Filed: {tally}._"
+    # Nothing actionable — stay silent. Newsletters/cold/etc. arriving is not
+    # something that needs to interrupt Quinton; they're filed without a ping.
     return ""
 
 
