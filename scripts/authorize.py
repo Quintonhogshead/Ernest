@@ -17,7 +17,11 @@ from __future__ import annotations
 import os
 import sys
 
-from ernest.config import load
+# Allow running as a plain script (python scripts/authorize.py …): put the repo
+# root on sys.path so the `ernest` package imports.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from ernest.config import load  # noqa: E402
 
 
 def _gmail(account: str) -> None:
