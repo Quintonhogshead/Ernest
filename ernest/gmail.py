@@ -65,6 +65,26 @@ def _decode_body(payload: dict) -> str:
     return ""
 
 
+def recent(cfg: Config, account: str, max_results: int = 100) -> list[dict]:
+    """Newest messages regardless of read state — for a library backfill."""
+    svc = _service(cfg, account)
+    listing = svc.users().messages().list(userId="me", maxResults=max_results).execute()
+    out: list[dict] = []
+    for ref in listing.get("messages", []):
+        msg = svc.users().messages().get(userId="me", id=ref["id"], format="full").execute()
+        payload = msg.get("payload", {})
+        headers = payload.get("headers", [])
+        out.append({
+            "id": msg["id"],
+            "account": account,
+            "sender": _header(headers, "From"),
+            "subject": _header(headers, "Subject"),
+            "date": _header(headers, "Date"),
+            "body_text": _decode_body(payload) or msg.get("snippet", ""),
+        })
+    return out
+
+
 def sent(cfg: Config, account: str, max_results: int = 12) -> list[dict]:
     """Recent messages you've sent — used to learn your writing voice."""
     svc = _service(cfg, account)

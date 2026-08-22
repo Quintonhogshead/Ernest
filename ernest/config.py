@@ -49,6 +49,7 @@ class Config:
     # reply drafting (step 1: draft-to-Discord, never auto-sends)
     draft_replies: bool = True
     draft_max: int = 5
+    triage_limit: int = 50
     # library / research
     ingest: bool = True
     research_budget_usd: float = 5.0
@@ -96,6 +97,7 @@ def load() -> Config:
         priority_keywords=_split(g("ERNEST_PRIORITY_KEYWORDS")),
         draft_replies=(g("ERNEST_DRAFT_REPLIES") or "1") != "0",
         draft_max=int(g("ERNEST_DRAFT_MAX") or "5"),
+        triage_limit=int(g("ERNEST_TRIAGE_LIMIT") or "50"),
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
         lat=g("ERNEST_LAT") or None,

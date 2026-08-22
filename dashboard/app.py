@@ -37,10 +37,11 @@ PASSWORD = os.environ.get("ERNEST_DASHBOARD_PASSWORD") or ""
 # Jobs the dashboard is allowed to launch (all read-only / dry where it matters).
 RUNNABLE = {
     "ping": ["jobs.ping"],
-    "triage": ["jobs.triage", "--dry-run", "--limit", "5"],
+    "triage": ["jobs.triage", "--dry-run", "--limit", "15"],
     "canvas": ["jobs.canvas_sync", "--dry-run"],
     "news": ["jobs.news", "--dry-run"],
     "brief": ["jobs.brief", "morning", "--dry-run"],
+    "backfill": ["jobs.backfill", "--limit", "40"],
 }
 
 
@@ -236,6 +237,7 @@ Present here: {tokens_present}</p>
 <button class="ghost" onclick="run(event,'canvas')">Canvas</button>
 <button class="ghost" onclick="run(event,'news')">News</button>
 <button class="ghost" onclick="run(event,'brief')">Morning brief</button>
+<button class="ghost" onclick="run(event,'backfill')">Backfill library (40/acct)</button>
 </div>
 <pre id="out">output appears here…</pre>
 <h2 style="margin-top:1.2rem">Recent activity</h2>

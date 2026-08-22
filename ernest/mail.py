@@ -58,3 +58,15 @@ def sent(cfg: Config, provider: str, account: str, max_results: int = 12) -> lis
 
         return outlook.sent(cfg, account, max_results)
     raise UnknownProvider(f"unknown mail provider: {provider}")
+
+
+def recent(cfg: Config, provider: str, account: str, max_results: int = 100) -> list[dict]:
+    if provider == "gmail":
+        from . import gmail
+
+        return gmail.recent(cfg, account, max_results)
+    if provider == "outlook":
+        from . import outlook
+
+        return outlook.recent(cfg, account, max_results)
+    raise UnknownProvider(f"unknown mail provider: {provider}")

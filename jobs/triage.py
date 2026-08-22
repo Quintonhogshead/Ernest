@@ -47,10 +47,11 @@ def _record(conn, cfg, msg, result):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--limit", type=int, default=25)
+    parser.add_argument("--limit", type=int, default=None)
     args = parser.parse_args()
 
     cfg = load()
+    limit = args.limit if args.limit is not None else cfg.triage_limit
     halt_if_paused(cfg, "triage")
     conn = connect()
 
@@ -62,7 +63,7 @@ def main() -> None:
 
     for provider, account in mail.accounts(cfg):
         try:
-            messages = mail.unread(cfg, provider, account, max_results=args.limit)
+            messages = mail.unread(cfg, provider, account, max_results=limit)
         except (GmailAuthError, OutlookAuthError) as exc:
             print(f"[{provider}:{account}] {exc}")
             log_event("triage", "auth_error",
