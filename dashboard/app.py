@@ -59,6 +59,28 @@ def _library_count() -> int | None:
         return None
 
 
+def _creds_dir() -> str:
+    from ernest.config import load
+
+    return load().google_credentials_dir
+
+
+def _token_files() -> list[str]:
+    d = _creds_dir()
+    if not os.path.isdir(d):
+        return []
+    return sorted(f for f in os.listdir(d)
+                  if f.startswith(("token_", "ms_token_")) and f.endswith(".json"))
+
+
+def _valid_token_name(name: str) -> bool:
+    return (
+        name.endswith(".json")
+        and (name.startswith("token_") or name.startswith("ms_token_"))
+        and "/" not in name and "\\" not in name and ".." not in name
+    )
+
+
 def _recent_audit(limit: int = 8) -> list[dict]:
     try:
         from ernest.audit import read_events
@@ -163,6 +185,8 @@ def render(flash: str = "") -> str:
     ) or '<div class="audit">no activity logged yet</div>'
 
     flash_html = f'<div class="flash">{html.escape(flash)}</div>' if flash else ""
+    present = _token_files()
+    tokens_present = ", ".join(html.escape(f) for f in present) if present else "none yet"
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -178,6 +202,23 @@ Anyone who can reach it and knows the password can read and change your keys.</d
 <div class="save-row"><button type="submit">Save configuration</button>
 <span class="sub" style="margin-left:1rem">Blank secret fields keep the stored value.</span></div>
 </form>
+
+<div class="card">
+<h2>Mail tokens</h2>
+<p class="sub" style="font-size:.85rem">Move the OAuth token files created by
+<code>authorize.py</code> onto this server. On your Mac, open the file (e.g.
+<code>state/google/token_work.json</code>), copy its contents, paste below, and save.
+Present here: {tokens_present}</p>
+<form method="post" action="/token">
+<label>File name</label>
+<input type="text" name="name" placeholder="token_work.json  or  ms_token_business.json" autocomplete="off">
+<label>File contents (JSON)</label>
+<textarea name="content" rows="5" style="width:100%;font-family:var(--mono);font-size:.78rem;
+  background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:3px;padding:.5rem"
+  placeholder='{{"token": "...", "refresh_token": "...", ...}}'></textarea>
+<div style="margin-top:.6rem"><button type="submit">Upload token</button></div>
+</form>
+</div>
 
 <div class="card status">
 <h2>Status</h2>
@@ -280,6 +321,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header("Location", "/")
             self.end_headers()
+        elif parsed.path == "/token":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            form = urllib.parse.parse_qs(body, keep_blank_values=True)
+            name = (form.get("name", [""])[0]).strip()
+            content = form.get("content", [""])[0]
+            if _valid_token_name(name) and content.strip():
+                try:
+                    json.loads(content)  # reject non-JSON before writing
+                    d = _creds_dir()
+                    os.makedirs(d, exist_ok=True)
+                    path = os.path.join(d, name)
+                    with open(path, "w", encoding="utf-8") as fh:
+                        fh.write(content)
+                    os.chmod(path, 0o600)
+                except Exception:
+                    pass  # invalid JSON or write error → silently ignore, page re-renders
+            self.send_response(303)
+            self.send_header("Location", "/")
+            self.end_headers()
         elif parsed.path == "/run":
             qs = urllib.parse.parse_qs(parsed.query)
             job = (qs.get("job") or [""])[0]
@@ -317,6 +378,12 @@ def main() -> None:
             "expose your API keys.\nSet ERNEST_DASHBOARD_PASSWORD (a strong secret) "
             "and try again. See DEPLOY-FLY.md."
         )
+
+    if os.environ.get("ERNEST_RUN_SCHEDULER"):
+        from ernest.scheduler import start_background
+
+        start_background(ROOT)
+        print("⏱️  scheduler started (triage + briefs + canvas + news)")
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     where = "localhost only" if is_local else f"{args.host} · password-protected"

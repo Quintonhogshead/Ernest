@@ -9,6 +9,9 @@ primary_region = "dfw"   # Dallas — closest Fly region to Austin
 [env]
   ERNEST_ENV_PATH = "/data/.env"
   ERNEST_DB_PATH = "/data/ernest.db"
+  GOOGLE_CREDENTIALS_DIR = "/data/google"   # mail OAuth tokens live on the volume
+  ERNEST_RUN_SCHEDULER = "1"                # run triage/briefs/canvas/news in-process
+  ERNEST_TZ = "America/Chicago"             # brief times are local to Austin
   PORT = "8080"
 
 # Persistent volume: your keys and library live here, not in the image.
@@ -18,10 +21,10 @@ primary_region = "dfw"   # Dallas — closest Fly region to Austin
 
 [http_service]
   internal_port = 8080
-  force_https = true          # always redirect to HTTPS
-  auto_stop_machines = "stop" # scale to zero when idle (cheap)
+  force_https = true           # always redirect to HTTPS
+  auto_stop_machines = false   # stay up — the scheduler must keep running
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1     # always-on so triage/briefs fire without the laptop
 
   [[http_service.checks]]
     interval = "30s"
