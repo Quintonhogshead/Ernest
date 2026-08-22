@@ -152,8 +152,22 @@ def _semantic_ranked(conn: sqlite3.Connection, cfg: Config, query: str, limit: i
 def search(conn: sqlite3.Connection, cfg: Config, query: str, k: int = 8) -> list[dict]:
     """Hybrid search: FTS + semantic, merged by reciprocal-rank fusion.
 
-    Routes to Postgres+pgvector when DATABASE_URL is set, else the SQLite backend.
+    When ``cfg.rerank`` is on, a wider candidate pool is fetched and an LLM
+    reranker reorders it to the top-k (see ``ernest.rerank``); otherwise the
+    fused top-k is returned directly. Routes to Postgres+pgvector when
+    DATABASE_URL is set, else the SQLite backend.
     """
+    pool = max(k, cfg.rerank_candidates) if cfg.rerank else k
+    hits = _hybrid(conn, cfg, query, pool)
+    if cfg.rerank and len(hits) > 1:
+        from . import rerank as _rerank
+
+        return _rerank.rerank(cfg, query, hits, k)
+    return hits[:k]
+
+
+def _hybrid(conn: sqlite3.Connection, cfg: Config, query: str, k: int) -> list[dict]:
+    """Fused FTS + semantic candidates, top-k by RRF (no reranking)."""
     if cfg.database_url:
         from . import pgstore
 
@@ -162,8 +176,9 @@ def search(conn: sqlite3.Connection, cfg: Config, query: str, k: int = 8) -> lis
         except Exception as exc:
             log_event("library", "pg_search_failed", {"error": str(exc)})
             return []
+    per = max(20, k)
     fused: dict[int, float] = {}
-    for ranked in (_fts_ranked(conn, query, 20), _semantic_ranked(conn, cfg, query, 20)):
+    for ranked in (_fts_ranked(conn, query, per), _semantic_ranked(conn, cfg, query, per)):
         for rank, rid in enumerate(ranked):
             fused[rid] = fused.get(rid, 0.0) + 1.0 / (_RRF_K + rank)
     if not fused:

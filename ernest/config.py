@@ -56,6 +56,11 @@ class Config:
     ingest: bool = True
     research_budget_usd: float = 5.0
     database_url: str | None = None  # set → use Postgres+pgvector; unset → SQLite
+    # reranking (Phase 3): retrieve a wide pool, then an LLM reorders to top-k.
+    # Off by default — prove it helps with `python -m jobs.eval` before enabling.
+    rerank: bool = False
+    rerank_model: str | None = None  # falls back to triage_model when unset
+    rerank_candidates: int = 30  # pool size fed to the reranker
     # weather
     lat: str | None = None
     lon: str | None = None
@@ -106,6 +111,9 @@ def load() -> Config:
         ingest=(g("ERNEST_INGEST") or "1") != "0",
         research_budget_usd=float(g("ERNEST_RESEARCH_BUDGET_USD") or "5"),
         database_url=g("DATABASE_URL") or None,
+        rerank=(g("ERNEST_RERANK") or "0") != "0",
+        rerank_model=g("ERNEST_RERANK_MODEL") or None,
+        rerank_candidates=int(g("ERNEST_RERANK_CANDIDATES") or "30"),
         lat=g("ERNEST_LAT") or None,
         lon=g("ERNEST_LON") or None,
         paused=bool(g("ERNEST_PAUSED")),

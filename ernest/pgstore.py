@@ -107,14 +107,15 @@ def search(cfg: Config, query: str, k: int = 8) -> list[dict]:
     conn = _get(cfg)
     fused: dict[int, float] = {}
     rows_by_id: dict[int, dict] = {}
+    per = max(20, k)  # pull a pool at least as wide as the requested k (reranking)
 
     # keyword (full-text) ranking
     with _lock:
         kw = conn.execute(
             "SELECT id, source, title, chunk FROM documents "
             "WHERE tsv @@ plainto_tsquery('english', %s) "
-            "ORDER BY ts_rank(tsv, plainto_tsquery('english', %s)) DESC LIMIT 20",
-            (query, query),
+            "ORDER BY ts_rank(tsv, plainto_tsquery('english', %s)) DESC LIMIT %s",
+            (query, query, per),
         ).fetchall()
     for rank, (rid, source, title, chunk) in enumerate(kw):
         fused[rid] = fused.get(rid, 0.0) + 1.0 / (_RRF_K + rank)
@@ -126,8 +127,8 @@ def search(cfg: Config, query: str, k: int = 8) -> list[dict]:
         with _lock:
             vec = conn.execute(
                 "SELECT id, source, title, chunk FROM documents "
-                "WHERE embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT 20",
-                (qvec,),
+                "WHERE embedding IS NOT NULL ORDER BY embedding <=> %s::vector LIMIT %s",
+                (qvec, per),
             ).fetchall()
         for rank, (rid, source, title, chunk) in enumerate(vec):
             fused[rid] = fused.get(rid, 0.0) + 1.0 / (_RRF_K + rank)
