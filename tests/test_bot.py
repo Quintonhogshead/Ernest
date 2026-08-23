@@ -61,6 +61,32 @@ def test_event_prefixes():
     assert route("event: book launch Sept 3") == ("event", "book launch Sept 3")
 
 
+def test_plain_english_calendar_add_routes_to_event():
+    # Free-form add/move/cancel intent is promoted into the approval-gated
+    # event flow (whole text passed through for extraction), not chat.
+    for t in (
+        "put dinner with Sam on my calendar Friday 7pm",
+        "add lunch with Karli to my calendar Tuesday 1pm",
+        "can you schedule a call with the printer friday",
+        "pencil in a dentist appointment Thursday 9am",
+        "move the book launch on my calendar to Sept 4",
+        "draft an all-day calendar event for 1 Year with Hannah on September 5",
+        "can you make a calendar event for my anniversary Sept 5",
+    ):
+        assert route(t) == ("event", t)
+
+
+def test_calendar_questions_stay_chat():
+    # Reading/checking the calendar must NOT trigger a write draft.
+    for t in (
+        "what's on my calendar today?",
+        "when is my next meeting on the calendar",
+        "am I free friday afternoon?",
+        "show me my calendar for next week",
+    ):
+        assert route(t)[0] == "chat"
+
+
 def test_approve_deny():
     assert route("approve 3") == ("approve", "3")
     assert route("deny 5") == ("deny", "5")
