@@ -1,6 +1,8 @@
 """Tests for the interactive bot's pure command router."""
 
-from ernest.bot import route
+import ernest.llm as llm
+from ernest.bot import classify, route
+from ernest.config import Config
 
 
 def test_help_variants():
@@ -110,3 +112,32 @@ def test_meetings_and_search():
     assert route("recap Social Media Pro") == ("meeting_search", "Social Media Pro")
     # exact "meetings" must not be swallowed by the "meeting " prefix
     assert route("meetings")[1] == ""
+
+
+def test_classify_maps_llm_intent(monkeypatch):
+    # The LLM router turns free-form text into a dispatchable (intent, arg).
+    monkeypatch.setattr(
+        llm, "complete_json",
+        lambda *a, **k: {"intent": "event", "argument": "dinner with Sam Friday 7pm"},
+    )
+    assert classify(Config(), "could you pop dinner with Sam on Friday at 7") == (
+        "event", "dinner with Sam Friday 7pm")
+
+
+def test_classify_chat_keeps_original_text(monkeypatch):
+    monkeypatch.setattr(llm, "complete_json",
+                        lambda *a, **k: {"intent": "chat", "argument": "ignored"})
+    assert classify(Config(), "hey there") == ("chat", "hey there")
+
+
+def test_classify_falls_back_to_chat_on_error(monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("no api key")
+    monkeypatch.setattr(llm, "complete_json", boom)
+    assert classify(Config(), "whatever") == ("chat", "whatever")
+
+
+def test_classify_rejects_unknown_intent(monkeypatch):
+    monkeypatch.setattr(llm, "complete_json",
+                        lambda *a, **k: {"intent": "launch_missiles", "argument": "x"})
+    assert classify(Config(), "do the thing") == ("chat", "do the thing")

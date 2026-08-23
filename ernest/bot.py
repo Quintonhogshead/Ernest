@@ -23,7 +23,11 @@ from .audit import log_event
 from .config import Config, load
 
 HELP = (
-    "🎩 **Ernest** — just talk to me, or use a command:\n"
+    "🎩 **Ernest** — just talk to me in plain English; I'll figure out what you "
+    "need. No commands required — ask what's on your calendar, tell me to add "
+    "something, say 'yes' to confirm it, ask me to remember a thing, or ask me "
+    "to research a topic, all in your own words. The commands below still work "
+    "if you prefer them:\n"
     "• _(just type)_ — chat with me; I remember our conversation\n"
     "• `remember <thing>` — save something for me to keep (a fact, a preference, a to-do)\n"
     "• `notes` — show what you've told me to remember\n"
@@ -187,6 +191,72 @@ def route(content: str) -> tuple[str, str]:
             or _calendar_read_intent(low):
         return "agenda", text
     return "chat", text  # free-form → conversational chat
+
+
+# Intents the LLM router may pick. Kept in sync with the dispatch in on_message;
+# every value here must be handled there.
+_INTENTS = ("agenda", "event", "approve", "deny", "research", "remember",
+            "meetings", "meeting_search", "notes", "status", "help", "ask",
+            "chat")
+_INTENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": list(_INTENTS)},
+        "argument": {"type": "string"},
+    },
+    "required": ["intent", "argument"],
+}
+_ROUTER_SYSTEM = (
+    "You are the intent router for Ernest, a personal assistant Quinton talks to "
+    "in plain English over Discord DMs. Classify his message into ONE intent and "
+    "extract its argument. Never answer the message — only classify it. "
+    "Intents:\n"
+    "- agenda: he wants to SEE his calendar/schedule or knows if he's free. "
+    "argument: any window word (today/tomorrow/month) or empty.\n"
+    "- event: he wants to ADD, move, or cancel a calendar event. argument: the "
+    "full event description, verbatim.\n"
+    "- approve: he's confirming a calendar event you already drafted (yes, sure, "
+    "go ahead, book it, do it, sounds good). argument: any number he gives, else "
+    "empty.\n"
+    "- deny: he's rejecting a drafted event (no, cancel that, forget it, don't). "
+    "argument: any number, else empty.\n"
+    "- research: he wants a deep, researched briefing on a topic. argument: the "
+    "topic.\n"
+    "- remember: he wants you to store a fact or preference for later. argument: "
+    "the thing to remember.\n"
+    "- meetings: he wants a list of his recent meetings. argument: empty.\n"
+    "- meeting_search: he asks about a specific meeting or its contents. "
+    "argument: the topic/person.\n"
+    "- notes: he wants to see notes he's told you to remember. argument: empty.\n"
+    "- status: he asks whether you're working / what you've been doing. argument: "
+    "empty.\n"
+    "- help: he asks what you can do or how to use you. argument: empty.\n"
+    "- ask: a question likely answerable from his email/history/library. "
+    "argument: the question.\n"
+    "- chat: anything else, or general conversation. argument: his message "
+    "verbatim.\n"
+    "Only choose approve/deny when he is clearly responding to a proposed event. "
+    "When unsure between ask and chat, pick ask for questions, chat otherwise."
+)
+
+
+def classify(cfg: Config, text: str) -> tuple[str, str]:
+    """LLM intent router for free-form messages. Falls back to ('chat', text)
+    on any error so a classifier hiccup never breaks the conversation."""
+    from ernest.llm import complete_json
+
+    try:
+        out = complete_json(cfg, cfg.triage_model, _ROUTER_SYSTEM, text,
+                            _INTENT_SCHEMA, max_tokens=120)
+        intent = out.get("intent", "chat")
+        if intent not in _INTENTS:
+            return "chat", text
+        arg = out.get("argument") or text
+        # For chat, always keep the original wording.
+        return intent, (text if intent == "chat" else arg)
+    except Exception as exc:
+        log_event("bot", "classify_error", {"error": str(exc)})
+        return "chat", text
 
 
 # ── blocking work, run off the event loop via asyncio.to_thread ──────────────
@@ -495,11 +565,18 @@ def _decide_sync(cfg: Config, arg: str, approve: bool) -> str:
     from ernest import gcal_actions
     from ernest.store import connect
 
-    try:
-        action_id = int(arg.strip().split()[0])
-    except (ValueError, IndexError):
-        return "Give me the action number, e.g. `approve 3`."
     conn = connect()
+    m = re.search(r"\d+", arg or "")
+    if m:
+        action_id = int(m.group())
+    else:  # no id given ("yes, book it") — act on the most recent pending one
+        row = conn.execute(
+            "SELECT id FROM pending_actions WHERE status = 'pending' "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return "There's nothing waiting for your approval right now."
+        action_id = row["id"]
     if approve:
         return gcal_actions.execute(cfg, conn, action_id)
     return gcal_actions.deny(conn, action_id)
@@ -581,6 +658,11 @@ def run() -> None:
             return
         cfg = load()  # reload each command so dashboard config changes take effect live
         command, arg = route(message.content)
+        # Deterministic parser handles explicit commands and clear calendar
+        # phrasing; for anything it files as plain chat, let the LLM router read
+        # the natural-language intent so Quinton never has to type a command.
+        if command == "chat":
+            command, arg = await asyncio.to_thread(classify, cfg, arg)
         log_event("bot", "command", {"command": command})
         try:
             async with message.channel.typing():
