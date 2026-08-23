@@ -27,7 +27,7 @@ def parse_spec(spec: str) -> tuple[str, str]:
         raise ConfigError(f"model spec must be 'provider:model', got {spec!r}")
     provider, model = spec.split(":", 1)
     provider, model = provider.strip().lower(), model.strip()
-    if provider not in ("anthropic", "openai"):
+    if provider not in ("anthropic", "openai", "ollama"):
         raise ConfigError(f"unknown model provider {provider!r} in {spec!r}")
     if not model:
         raise ConfigError(f"empty model id in {spec!r}")
@@ -72,6 +72,20 @@ def _openai(cfg: Config):
     return openai.OpenAI(api_key=cfg.openai_api_key)
 
 
+def _ollama(cfg: Config):
+    # Ollama exposes an OpenAI-compatible endpoint; the key is ignored by Ollama
+    # but the SDK requires a non-empty string. Only the chat models route here —
+    # embeddings stay on the real openai: client, so the RAG index is untouched.
+    import openai
+
+    return openai.OpenAI(base_url=cfg.ollama_base_url, api_key="ollama")
+
+
+def _chat_client(cfg: Config, provider: str):
+    """The OpenAI-style client for a non-anthropic provider."""
+    return _ollama(cfg) if provider == "ollama" else _openai(cfg)
+
+
 # ── text completion ──────────────────────────────────────────────────────────
 
 def complete_chat(
@@ -87,7 +101,7 @@ def complete_chat(
         return "".join(
             b.text for b in resp.content if getattr(b, "type", None) == "text"
         ).strip()
-    client = _openai(cfg)
+    client = _chat_client(cfg, provider)
     resp = client.chat.completions.create(
         model=model,
         max_completion_tokens=max_tokens,
@@ -111,7 +125,7 @@ def complete_text(
         return "".join(
             b.text for b in resp.content if getattr(b, "type", None) == "text"
         ).strip()
-    client = _openai(cfg)
+    client = _chat_client(cfg, provider)
     resp = client.chat.completions.create(
         model=model,
         max_completion_tokens=max_tokens,
@@ -158,7 +172,7 @@ def complete_json(
                 b.text for b in resp.content if getattr(b, "type", None) == "text"
             )
         else:
-            client = _openai(cfg)
+            client = _chat_client(cfg, provider)
             resp = client.chat.completions.create(
                 model=model,
                 max_completion_tokens=max_tokens,

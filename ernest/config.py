@@ -34,6 +34,8 @@ class Config:
     # keys
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    # local models via Ollama's OpenAI-compatible endpoint (ollama: specs)
+    ollama_base_url: str = "http://localhost:11434/v1"
     # discord
     discord_token: str | None = None
     discord_user_id: str | None = None
@@ -107,6 +109,7 @@ def load() -> Config:
         embed_model=g("ERNEST_EMBED_MODEL") or "openai:text-embedding-3-small",
         anthropic_api_key=g("ANTHROPIC_API_KEY") or None,
         openai_api_key=g("OPENAI_API_KEY") or None,
+        ollama_base_url=g("ERNEST_OLLAMA_BASE_URL") or "http://localhost:11434/v1",
         discord_token=g("ERNEST_DISCORD_TOKEN") or None,
         discord_user_id=g("ERNEST_DISCORD_USER_ID") or None,
         canvas_base_url=(g("CANVAS_BASE_URL") or "").rstrip("/") or None,
