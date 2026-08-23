@@ -12,7 +12,7 @@ primary_region = "dfw"   # Dallas — closest Fly region to Austin
   GOOGLE_CREDENTIALS_DIR = "/data/google"   # mail OAuth tokens live on the volume
   ERNEST_RUN_SCHEDULER = "1"                # run triage/briefs/canvas/news in-process
   ERNEST_RUN_BOT = "1"                      # run the interactive Discord bot in-process
-  ERNEST_TZ = "America/Chicago"             # brief times are local to Austin
+  ERNEST_TZ = "America/New_York"            # brief/agenda/event times are local to Orlando (Eastern)
   PORT = "8080"
 
 # Persistent volume: your keys and library live here, not in the image.

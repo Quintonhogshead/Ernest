@@ -102,6 +102,31 @@ def get_or_create_calendar(cfg: Config, account: str, name: str = _CALENDAR_NAME
     return created["id"]
 
 
+def list_calendars(cfg: Config, account: str) -> list[dict]:
+    """Every calendar on the account: {id, summary, selected, primary}.
+
+    ``selected`` mirrors the checkbox in the Google Calendar UI, so reading the
+    selected ones shows the user exactly what they see — including secondary
+    calendars like "Ernest" where Ernest books events, not just ``primary``.
+    """
+    svc = _service(cfg, account)
+    out: list[dict] = []
+    page_token = None
+    while True:
+        resp = svc.calendarList().list(pageToken=page_token).execute()
+        for cal in resp.get("items", []):
+            out.append({
+                "id": cal["id"],
+                "summary": cal.get("summary", "") or "",
+                "selected": bool(cal.get("selected", False)),
+                "primary": bool(cal.get("primary", False)),
+            })
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return out
+
+
 def list_events(cfg: Config, account: str, calendar_id: str,
                  time_min: str, time_max: str) -> list[dict]:
     """Events on ``calendar_id`` in [time_min, time_max] (RFC3339), normalized."""
@@ -121,8 +146,19 @@ def list_events(cfg: Config, account: str, calendar_id: str,
 
 
 def _event_body(event: dict) -> dict:
+    tz = event.get("timezone")
+
     def _when(value: str) -> dict:
-        return {"date": value} if len(value) == 10 else {"dateTime": value}
+        if len(value) == 10:  # bare date → all-day
+            return {"date": value}
+        when = {"dateTime": value}
+        # If the timestamp is naive (no offset/Z), tell Google which zone it's in
+        # so it applies the correct DST rules — instead of us baking an offset the
+        # model might get wrong across a daylight-saving boundary.
+        clock = value[10:]
+        if tz and "+" not in clock and "-" not in clock and not value.endswith("Z"):
+            when["timeZone"] = tz
+        return when
 
     body = {
         "summary": event.get("title", ""),

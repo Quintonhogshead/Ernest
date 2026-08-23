@@ -443,6 +443,14 @@ def _local_tz():
         return None
 
 
+def _local_tz_name() -> str:
+    """The IANA name of the user's timezone (ERNEST_TZ, default America/Chicago),
+    sent to Google so it localizes naive event times with correct DST."""
+    import os
+
+    return os.environ.get("ERNEST_TZ") or "America/Chicago"
+
+
 def _now_local_str() -> str:
     from datetime import datetime
 
@@ -520,12 +528,30 @@ def _agenda_sync(cfg: Config, arg: str) -> str:
     events, errors = [], []
     for _provider, account in accounts:
         try:
-            for ev in gcal.list_events(cfg, account, "primary", time_min, time_max):
-                ev["account"] = account
-                events.append(ev)
+            cals = gcal.list_calendars(cfg, account)
         except Exception as exc:
             errors.append(f"{account}: {exc}")
+            continue
+        for cal in cals:
+            if not cal["selected"]:  # only calendars the user actually shows
+                continue
+            try:
+                for ev in gcal.list_events(cfg, account, cal["id"], time_min, time_max):
+                    ev["account"] = account
+                    events.append(ev)
+            except Exception as exc:
+                errors.append(f"{account}/{cal['summary']}: {exc}")
+    # Collapse duplicates — the "Ernest" calendar mirrors primary events, so the
+    # same commitment can appear on more than one calendar.
     events.sort(key=lambda e: e["start"])
+    seen, deduped = set(), []
+    for ev in events:
+        key = (ev["title"], ev["start"], ev["end"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(ev)
+    events = deduped
     show_acct = len(accounts) > 1
     if not events:
         base = f"Nothing on your calendar for {label}."
@@ -560,8 +586,10 @@ def _propose_event_sync(cfg: Config, text: str) -> tuple[str, int | None]:
                 "then I can put things on your calendar.", None)
     system = (
         "Extract a single calendar event from the user's request. Return start "
-        "and end as RFC3339 timestamps with the timezone offset (e.g. "
-        "2026-08-25T13:00:00-05:00), or a bare YYYY-MM-DD for an all-day event. "
+        "and end as a naive local timestamp with NO timezone offset (e.g. "
+        "2026-08-25T13:00:00) — just the wall-clock time the user means — or a "
+        "bare YYYY-MM-DD for an all-day event. Do NOT append a timezone offset or "
+        "Z; the correct zone is applied separately. "
         f"The current local time is {_now_local_str()} — resolve relative dates "
         "like 'tomorrow' or 'Tuesday' against it. If no end is given, assume one "
         "hour after start. Leave location/notes empty if not mentioned."
@@ -571,6 +599,7 @@ def _propose_event_sync(cfg: Config, text: str) -> tuple[str, int | None]:
     except Exception as exc:
         return (f"I couldn't parse an event out of that — {exc}. "
                 "Try `event lunch with Karli Tuesday 1pm`.", None)
+    ev["timezone"] = _local_tz_name()  # Google localizes naive times with this
     when = ev["start"][:16].replace("T", " ")
     where = f" at {ev['location']}" if ev.get("location") else ""
     desc = f"add \"{ev['title']}\"{where} on {when}"

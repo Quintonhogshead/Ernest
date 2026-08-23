@@ -78,3 +78,26 @@ def test_fingerprint_stable_and_sensitive():
     c = gcal.fingerprint("Lunch", "2026-09-03T13:30", "2026-09-03T14:00", "Cafe")
     assert a == b
     assert a != c
+
+
+def test_event_body_localizes_naive_times():
+    # A naive local time gets a timeZone so Google applies DST correctly.
+    b = gcal._event_body({"title": "x", "start": "2026-08-25T09:00:00",
+                          "end": "2026-08-25T10:00:00",
+                          "timezone": "America/New_York"})
+    assert b["start"] == {"dateTime": "2026-08-25T09:00:00",
+                          "timeZone": "America/New_York"}
+
+
+def test_event_body_all_day_has_no_timezone():
+    b = gcal._event_body({"title": "x", "start": "2026-09-05",
+                          "end": "2026-09-06", "timezone": "America/New_York"})
+    assert b["start"] == {"date": "2026-09-05"}
+
+
+def test_event_body_keeps_explicit_offset():
+    # If a timestamp already carries an offset, don't second-guess it.
+    b = gcal._event_body({"title": "x", "start": "2026-08-25T09:00:00-04:00",
+                          "end": "2026-08-25T10:00:00-04:00",
+                          "timezone": "America/New_York"})
+    assert "timeZone" not in b["start"]
