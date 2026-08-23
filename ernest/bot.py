@@ -552,19 +552,29 @@ def _agenda_sync(cfg: Config, arg: str) -> str:
         seen.add(key)
         deduped.append(ev)
     events = deduped
-    show_acct = len(accounts) > 1
+
+    # Structured facts for the voice layer (and the plain-text fallback).
     if not events:
-        base = f"Nothing on your calendar for {label}."
+        facts = f"There is nothing on the calendar for {label}."
     else:
-        lines = [f"Here's {label}:"]
+        fact_lines = []
         for ev in events:
-            where = f" @ {ev['location']}" if ev.get("location") else ""
-            who = f"  [{ev['account']}]" if show_acct else ""
-            lines.append(f"• {_fmt_when(ev['start'])} — {ev['title']}{where}{who}")
-        base = "\n".join(lines)
+            where = f" at {ev['location']}" if ev.get("location") else ""
+            fact_lines.append(f"- {_fmt_when(ev['start'])}: {ev['title']}{where}")
+        facts = f"Calendar for {label}:\n" + "\n".join(fact_lines)
     if errors:
-        base += f"\n(couldn't read {'; '.join(errors)})"
-    return base
+        facts += f"\n(Some calendars couldn't be read: {'; '.join(errors)}.)"
+
+    from ernest import voice
+    instruction = (
+        f"Tell Quinton what's on his calendar for {label}, conversationally, in a "
+        "sentence or two — e.g. \"You've got the dentist at 9 and lunch with Nick "
+        "at 11:30.\" Use each event's exact day and time exactly as given; never "
+        "invent, reword a time, or drop an event. For events today you can give "
+        "just the time (\"at 9\"); include the weekday for later dates. If there's "
+        "nothing, say so lightly."
+    )
+    return voice.compose(cfg, instruction, facts, facts)
 
 
 def _propose_event_sync(cfg: Config, text: str) -> tuple[str, int | None]:
