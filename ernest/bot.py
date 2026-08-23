@@ -33,7 +33,7 @@ HELP = (
     "• `notes` — show what you've told me to remember\n"
     "• `ask <question>` — strict answer from your library, with citations\n"
     "• `research <topic>` — a full cited briefing (takes a few minutes)\n"
-    "• `agenda` — what's on your calendar (add `today`, `tomorrow`, or `month` to narrow it)\n"
+    "• `agenda` — what's on your calendar (next 30 days; say `today`, `this week`, `next 3 months`, `this year`...)\n"
     "• `event <description>` — I draft a calendar event; react thumbs-up (or `approve <id>`) to book it\n"
     "• `meetings` — recent meetings I've captured; `meeting <topic>` to search transcripts\n"
     "• `status` — what I can see right now\n"
@@ -212,7 +212,8 @@ _ROUTER_SYSTEM = (
     "extract its argument. Never answer the message — only classify it. "
     "Intents:\n"
     "- agenda: he wants to SEE his calendar/schedule or knows if he's free. "
-    "argument: any window word (today/tomorrow/month) or empty.\n"
+    "argument: the time window in his words if any (e.g. today, tomorrow, this "
+    "week, next 3 months, this year, everything), else empty.\n"
     "- event: he wants to ADD, move, or cancel a calendar event. argument: the "
     "full event description, verbatim.\n"
     "- approve: he's confirming a calendar event you already drafted (yes, sure, "
@@ -469,25 +470,46 @@ def _fmt_when(value: str) -> str:
     return dt.strftime("%a %b %d %I:%M%p").replace("AM", "am").replace("PM", "pm")
 
 
+def _agenda_window(arg: str, now):
+    """Parse an agenda time window from free text → (start, end, label).
+
+    Handles today/tomorrow, this/next week/month/year, an explicit "next N
+    days/weeks/months", and "everything/all" (a year out). Defaults to the next
+    30 days so nothing just past a week silently disappears.
+    """
+    from datetime import timedelta
+
+    low = (arg or "").lower()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if "today" in low:
+        return midnight, midnight + timedelta(days=1), "today"
+    if "tomorrow" in low:
+        d = midnight + timedelta(days=1)
+        return d, d + timedelta(days=1), "tomorrow"
+
+    m = re.search(r"(\d+)\s*(day|week|month|year)s?", low)
+    if m:
+        n, unit = int(m.group(1)), m.group(2)
+        days = {"day": 1, "week": 7, "month": 31, "year": 365}[unit] * n
+        return now, now + timedelta(days=days), f"the next {n} {unit}{'s' if n != 1 else ''}"
+    if "year" in low or "everything" in low or "all " in low or low.strip() == "all":
+        return now, now + timedelta(days=365), "the next year"
+    if "month" in low:
+        return now, now + timedelta(days=31), "the next month"
+    if "week" in low:
+        return now, now + timedelta(days=7), "the next 7 days"
+    return now, now + timedelta(days=30), "the next 30 days"
+
+
 def _agenda_sync(cfg: Config, arg: str) -> str:
     """Read the user's real Google calendars (all gcal-authorized accounts) and
     return a merged, time-sorted agenda. Read-only — never writes."""
     from datetime import datetime, timedelta
     from ernest import gcal, mail
 
-    low = (arg or "").lower()
     tz = _local_tz()
     now = datetime.now(tz) if tz is not None else datetime.now().astimezone()
-    if "today" in low:
-        lo = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        hi, label = lo + timedelta(days=1), "today"
-    elif "tomorrow" in low:
-        lo = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        hi, label = lo + timedelta(days=1), "tomorrow"
-    elif "month" in low:
-        lo, hi, label = now, now + timedelta(days=31), "the next month"
-    else:
-        lo, hi, label = now, now + timedelta(days=7), "the next 7 days"
+    lo, hi, label = _agenda_window(arg, now)
     time_min, time_max = lo.isoformat(), hi.isoformat()
 
     accounts = [(p, a) for p, a in mail.accounts(cfg)

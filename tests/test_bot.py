@@ -141,3 +141,21 @@ def test_classify_rejects_unknown_intent(monkeypatch):
     monkeypatch.setattr(llm, "complete_json",
                         lambda *a, **k: {"intent": "launch_missiles", "argument": "x"})
     assert classify(Config(), "do the thing") == ("chat", "do the thing")
+
+
+def test_agenda_window_ranges():
+    from datetime import datetime
+    from ernest.bot import _agenda_window, _local_tz
+    now = datetime(2026, 8, 23, 9, 0, tzinfo=_local_tz())
+
+    def days(arg):
+        lo, hi, _ = _agenda_window(arg, now)
+        return (hi - lo).days
+
+    assert days("") == 30            # default is a month, not a week
+    assert days("today") == 1
+    assert days("this week") == 7
+    assert days("next 3 months") == 93
+    assert days("this year") == 365
+    assert days("everything") == 365
+    assert days("next 10 days") == 10
