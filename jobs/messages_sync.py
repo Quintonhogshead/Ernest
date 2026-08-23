@@ -35,6 +35,8 @@ def main() -> None:
         log_event("imessage", "read_error", {"error": str(exc)})
         return
 
+    from ernest import steer
+    extra_senders, extra_keywords = steer.priority_rules(conn)
     lines, urgent = [], []
     new = 0
     for m in msgs:
@@ -44,7 +46,7 @@ def main() -> None:
             continue
         new += 1
         result = triage.classify(cfg, m, kind="text")
-        reason = triage.priority_reason(cfg, m)
+        reason = triage.priority_reason(cfg, m, tuple(extra_senders), tuple(extra_keywords))
         if reason:
             result["urgent"] = True
         entry = f"• {m['sender']} — {result['summary']}"

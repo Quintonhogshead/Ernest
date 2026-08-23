@@ -62,18 +62,22 @@ def _wrap_text(msg: dict) -> str:
     )
 
 
-def priority_reason(cfg: Config, msg: dict) -> str | None:
+def priority_reason(cfg: Config, msg: dict,
+                    extra_senders: tuple[str, ...] = (),
+                    extra_keywords: tuple[str, ...] = ()) -> str | None:
     """Return a reason string if this message should always ping, else None.
 
     Deterministic (no model): matches configured senders (substring — so a full
     address or a bare domain both work) and keywords (in subject or body).
+    ``extra_senders``/``extra_keywords`` are user rules set live from Discord
+    (see ernest.steer), merged on top of the .env-configured ones.
     """
     sender = (msg.get("sender") or "").lower()
-    for s in cfg.priority_senders:
+    for s in (*cfg.priority_senders, *extra_senders):
         if s.lower() in sender:
             return f"from {s}"
     haystack = ((msg.get("subject") or "") + " " + (msg.get("body_text") or msg.get("text") or "")).lower()
-    for kw in cfg.priority_keywords:
+    for kw in (*cfg.priority_keywords, *extra_keywords):
         if kw.lower() in haystack:
             return f'mentions "{kw}"'
     return None

@@ -30,6 +30,7 @@ HELP = (
     "if you prefer them:\n"
     "• _(just type)_ — chat with me; I remember our conversation\n"
     "• `remember <thing>` — save something for me to keep (a fact, a preference, a to-do)\n"
+    "• _steer my triage_ — \"always flag emails from Karli\", \"stop prioritizing newsletters\"\n"
     "• `notes` — show what you've told me to remember\n"
     "• `ask <question>` — strict answer from your library, with citations\n"
     "• `research <topic>` — a full cited briefing (takes a few minutes)\n"
@@ -196,8 +197,8 @@ def route(content: str) -> tuple[str, str]:
 # Intents the LLM router may pick. Kept in sync with the dispatch in on_message;
 # every value here must be handled there.
 _INTENTS = ("agenda", "event", "approve", "deny", "research", "remember",
-            "meetings", "meeting_search", "notes", "status", "help", "ask",
-            "chat")
+            "steer", "meetings", "meeting_search", "notes", "status", "help",
+            "ask", "chat")
 _INTENT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -225,6 +226,11 @@ _ROUTER_SYSTEM = (
     "topic.\n"
     "- remember: he wants you to store a fact or preference for later. argument: "
     "the thing to remember.\n"
+    "- steer: he wants to change how you PRIORITIZE email — always flag (or stop "
+    "flagging) a sender, domain, or keyword. E.g. 'flag anything from my boss', "
+    "'make emails from karli@x.com urgent', 'stop prioritizing newsletters', "
+    "'always ping me about the Henderson contract'. argument: his instruction, "
+    "verbatim.\n"
     "- meetings: he wants a list of his recent meetings. argument: empty.\n"
     "- meeting_search: he asks about a specific meeting or its contents. "
     "argument: the topic/person.\n"
@@ -577,6 +583,76 @@ def _agenda_sync(cfg: Config, arg: str) -> str:
     return voice.compose(cfg, instruction, facts, facts)
 
 
+_STEER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ops": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "remove"]},
+                    "kind": {"type": "string", "enum": ["sender", "keyword"]},
+                    "value": {"type": "string"},
+                },
+                "required": ["action", "kind", "value"],
+            },
+        },
+    },
+    "required": ["ops"],
+}
+_STEER_SYSTEM = (
+    "Quinton is telling Ernest how to prioritize his email. Convert his message "
+    "into add/remove operations on priority rules. A 'sender' is an email address "
+    "or bare domain to always flag as urgent; a 'keyword' is a word or short "
+    "phrase in the subject/body. Extract the minimal exact value (just the "
+    "address, domain, or phrase — no quotes, no extra words). Examples: 'always "
+    "flag emails from karli@x.com' -> add sender karli@x.com; 'stop prioritizing "
+    "newsletters' -> remove keyword newsletter; 'anything about the Henderson "
+    "contract is urgent' -> add keyword Henderson contract. If nothing is "
+    "actionable, return an empty ops list."
+)
+
+
+def _steer_sync(cfg: Config, text: str) -> str:
+    """Apply a natural-language priority instruction and confirm what changed."""
+    from ernest import steer, voice
+    from ernest.llm import complete_json
+    from ernest.store import connect
+
+    try:
+        out = complete_json(cfg, cfg.triage_model, _STEER_SYSTEM, text,
+                            _STEER_SCHEMA, max_tokens=200)
+        ops = out.get("ops") or []
+    except Exception as exc:
+        log_event("bot", "steer_error", {"error": str(exc)})
+        ops = []
+    if not ops:
+        return ("Tell me a sender or keyword to prioritize and I'll flag it — "
+                "e.g. \"always flag emails from karli@example.com\" or \"make "
+                "anything about the Henderson contract urgent.\"")
+
+    conn = connect()
+    changed = []
+    for op in ops:
+        kind, value = op.get("kind"), (op.get("value") or "").strip()
+        if kind not in ("sender", "keyword") or not value:
+            continue
+        if op.get("action") == "remove":
+            ok = steer.remove(conn, kind, value)
+            changed.append(f"{'stopped flagging' if ok else 'was not flagging'} "
+                          f"{kind} \"{value}\"")
+        else:
+            ok = steer.add(conn, kind, value)
+            changed.append(f"{'now always flag' if ok else 'already flag'} "
+                          f"{kind} \"{value}\" as urgent")
+    log_event("bot", "steer_applied", {"ops": len(changed)})
+    facts = "Priority rule changes:\n" + "\n".join(f"- {c}" for c in changed)
+    instruction = ("Confirm to Quinton, in a sentence, what priority rules you "
+                   "just changed. Be concrete about the sender/keyword.")
+    return voice.compose(cfg, instruction, facts, facts)
+
+
 def _propose_event_sync(cfg: Config, text: str) -> tuple[str, int | None]:
     """Draft an event and queue it for approval.
 
@@ -763,6 +839,8 @@ def run() -> None:
                         await _send(message.channel, await asyncio.to_thread(_research_sync, cfg, arg))
                 elif command == "agenda":
                     await _send(message.channel, await asyncio.to_thread(_agenda_sync, cfg, arg))
+                elif command == "steer":
+                    await _send(message.channel, await asyncio.to_thread(_steer_sync, cfg, arg))
                 elif command == "event":
                     if not arg:
                         await _send(message.channel, "What's the event? e.g. `event lunch with Karli Tuesday 1pm`")

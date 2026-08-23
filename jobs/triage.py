@@ -54,6 +54,8 @@ def main() -> None:
     limit = args.limit if args.limit is not None else cfg.triage_limit
     halt_if_paused(cfg, "triage")
     conn = connect()
+    from ernest import steer
+    extra_senders, extra_keywords = steer.priority_rules(conn)
 
     grouped: dict[str, dict[str, list[str]]] = {}
     urgent_msgs: list[str] = []
@@ -76,7 +78,7 @@ def main() -> None:
                 continue
             new += 1
             result = triage.classify(cfg, msg)
-            reason = triage.priority_reason(cfg, msg)
+            reason = triage.priority_reason(cfg, msg, tuple(extra_senders), tuple(extra_keywords))
             if reason:
                 result["urgent"] = True  # your priority list overrides the model
             _record(conn, cfg, msg, result)
