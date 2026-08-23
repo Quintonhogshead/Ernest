@@ -76,14 +76,24 @@ def test_plain_english_calendar_add_routes_to_event():
         assert route(t) == ("event", t)
 
 
-def test_calendar_questions_stay_chat():
-    # Reading/checking the calendar must NOT trigger a write draft.
+def test_calendar_questions_route_to_agenda():
+    # Reading/checking the calendar routes to the read-only agenda command,
+    # never to the write-draft flow.
     for t in (
+        "agenda",
+        "my calendar",
         "what's on my calendar today?",
         "when is my next meeting on the calendar",
         "am I free friday afternoon?",
         "show me my calendar for next week",
+        "what do I have tomorrow",
     ):
+        assert route(t)[0] == "agenda"
+
+
+def test_nonclendar_freeform_still_chat():
+    for t in ("what did we tell that author?", "hey, how's it going?",
+              "summarize the Karli thread"):
         assert route(t)[0] == "chat"
 
 

@@ -29,6 +29,7 @@ HELP = (
     "• `notes` — show what you've told me to remember\n"
     "• `ask <question>` — strict answer from your library, with citations\n"
     "• `research <topic>` — a full cited briefing (takes a few minutes)\n"
+    "• `agenda` — what's on your calendar (add `today`, `tomorrow`, or `month` to narrow it)\n"
     "• `event <description>` — I draft a calendar event; react thumbs-up (or `approve <id>`) to book it\n"
     "• `meetings` — recent meetings I've captured; `meeting <topic>` to search transcripts\n"
     "• `status` — what I can see right now\n"
@@ -60,6 +61,9 @@ CHAT_SYSTEM = (
     "to send it as a command starting with `event ` — e.g. `event 1 Year with "
     "Hannah Sept 5` — and that he can then react thumbs-up (or `approve <id>`) to "
     "confirm. That command is the ONLY thing that actually creates the draft. "
+    "You CAN read his calendar: if he asks what's on it or whether he's free, "
+    "tell him to use `agenda` (optionally `agenda today` / `agenda tomorrow` / "
+    "`agenda month`), which reads his real Google calendars back to him. "
     "For anything else you can't do, say so plainly (a touch of wit is fine) and "
     "offer what you can — draft text he can copy, or research it. For a full cited "
     "briefing, point him to `research <topic>`.\n\n"
@@ -122,6 +126,21 @@ def _calendar_add_intent(low: str) -> bool:
     return any(s in low for s in strong)
 
 
+def _calendar_read_intent(low: str) -> bool:
+    """True when the message is asking to SEE the calendar, not change it.
+
+    Checked only after ``_calendar_add_intent`` has already claimed writes, so a
+    plain mention of the calendar/agenda (or a "what do I have?" style question)
+    reads it back.
+    """
+    if "calendar" in low or "agenda" in low:
+        return True
+    reads = ("what do i have", "what am i doing", "am i free", "my schedule",
+             "free on", "busy on", "whats on my", "what's on my",
+             "anything today", "anything this week")
+    return any(r in low for r in reads)
+
+
 def route(content: str) -> tuple[str, str]:
     """Pure command parser → (command, argument). Testable without Discord."""
     text = (content or "").strip()
@@ -164,6 +183,9 @@ def route(content: str) -> tuple[str, str]:
     # to the conversational model (which can't book and must not claim it did).
     if _calendar_add_intent(low):
         return "event", text
+    if low in ("agenda", "my agenda", "my calendar", "my schedule") \
+            or _calendar_read_intent(low):
+        return "agenda", text
     return "chat", text  # free-form → conversational chat
 
 
@@ -336,17 +358,95 @@ def _home_calendar(cfg: Config, conn):
     return account, calendar_id
 
 
-def _now_local_str() -> str:
+def _local_tz():
+    """The user's timezone (ERNEST_TZ, default America/Chicago) — so agenda and
+    event times read correctly even though the server runs in UTC. None if
+    zoneinfo is unavailable, in which case callers fall back to system local."""
     import os
-    from datetime import datetime
 
     try:
         from zoneinfo import ZoneInfo
 
-        tz = ZoneInfo(os.environ.get("ERNEST_TZ") or "America/Chicago")
-        return datetime.now(tz).strftime("%A %Y-%m-%d %H:%M %z")
+        return ZoneInfo(os.environ.get("ERNEST_TZ") or "America/Chicago")
     except Exception:
-        return datetime.now().strftime("%A %Y-%m-%d %H:%M")
+        return None
+
+
+def _now_local_str() -> str:
+    from datetime import datetime
+
+    tz = _local_tz()
+    if tz is not None:
+        return datetime.now(tz).strftime("%A %Y-%m-%d %H:%M %z")
+    return datetime.now().strftime("%A %Y-%m-%d %H:%M")
+
+
+def _fmt_when(value: str) -> str:
+    """Render an RFC3339 start (or bare YYYY-MM-DD) as a short local label."""
+    from datetime import datetime
+
+    if len(value) == 10:  # all-day
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").strftime("%a %b %d (all day)")
+        except ValueError:
+            return value
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    tz = _local_tz()
+    dt = dt.astimezone(tz) if tz is not None else dt.astimezone()
+    return dt.strftime("%a %b %d %I:%M%p").replace("AM", "am").replace("PM", "pm")
+
+
+def _agenda_sync(cfg: Config, arg: str) -> str:
+    """Read the user's real Google calendars (all gcal-authorized accounts) and
+    return a merged, time-sorted agenda. Read-only — never writes."""
+    from datetime import datetime, timedelta
+    from ernest import gcal, mail
+
+    low = (arg or "").lower()
+    tz = _local_tz()
+    now = datetime.now(tz) if tz is not None else datetime.now().astimezone()
+    if "today" in low:
+        lo = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        hi, label = lo + timedelta(days=1), "today"
+    elif "tomorrow" in low:
+        lo = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        hi, label = lo + timedelta(days=1), "tomorrow"
+    elif "month" in low:
+        lo, hi, label = now, now + timedelta(days=31), "the next month"
+    else:
+        lo, hi, label = now, now + timedelta(days=7), "the next 7 days"
+    time_min, time_max = lo.isoformat(), hi.isoformat()
+
+    accounts = [(p, a) for p, a in mail.accounts(cfg)
+                if p == "gmail" and gcal.has_token(cfg, a)]
+    if not accounts:
+        return ("I can't see your calendar yet — run "
+                "`scripts/authorize.py gcal <account>` and upload the token.")
+    events, errors = [], []
+    for _provider, account in accounts:
+        try:
+            for ev in gcal.list_events(cfg, account, "primary", time_min, time_max):
+                ev["account"] = account
+                events.append(ev)
+        except Exception as exc:
+            errors.append(f"{account}: {exc}")
+    events.sort(key=lambda e: e["start"])
+    show_acct = len(accounts) > 1
+    if not events:
+        base = f"Nothing on your calendar for {label}."
+    else:
+        lines = [f"Here's {label}:"]
+        for ev in events:
+            where = f" @ {ev['location']}" if ev.get("location") else ""
+            who = f"  [{ev['account']}]" if show_acct else ""
+            lines.append(f"• {_fmt_when(ev['start'])} — {ev['title']}{where}{who}")
+        base = "\n".join(lines)
+    if errors:
+        base += f"\n(couldn't read {'; '.join(errors)})"
+    return base
 
 
 def _propose_event_sync(cfg: Config, text: str) -> tuple[str, int | None]:
@@ -518,6 +618,8 @@ def run() -> None:
                     else:
                         await _send(message.channel, f"On it — digging into {arg}. Give me a few minutes.")
                         await _send(message.channel, await asyncio.to_thread(_research_sync, cfg, arg))
+                elif command == "agenda":
+                    await _send(message.channel, await asyncio.to_thread(_agenda_sync, cfg, arg))
                 elif command == "event":
                     if not arg:
                         await _send(message.channel, "What's the event? e.g. `event lunch with Karli Tuesday 1pm`")
