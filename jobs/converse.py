@@ -10,9 +10,11 @@ It wires the pieces that already exist into one spoken turn:
                                      └── the same intent router the Discord bot uses ──┘
 
 Read-style intents (ask, agenda, research, chat, notes, meetings, status, remember)
-run for real. Write/send intents (create an event, steer priority, approve/deny)
-are NOT executed by voice yet — Ernest says so and points you at Discord, so the
-approval discipline the text bot enforces isn't bypassed by talking.
+run for real. Creating a calendar event runs too, but behind a spoken confirm-gate:
+Ernest reads the event back and does nothing until you say "yes" (nothing is
+written on a "no" or an unclear answer). The session also carries a few turns of
+context, so follow-ups like "make it 4pm" or "add it" resolve. Priority steering
+still routes to Discord.
 
 Usage:
     python -m jobs.converse --wake          # hands-free: "hey jarvis" then a command
@@ -30,10 +32,12 @@ the wake word adds openWakeWord + a VAD endpointer:
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
 import wave
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ernest import speech
@@ -46,18 +50,61 @@ _VOICE_SESSION = 0  # stable channel id so _chat_sync keeps this session's histo
 # Farewell phrases that end the loop without a round-trip to a model.
 _BYES = ("goodbye", "good bye", "that's all", "thats all", "stop listening", "never mind")
 
+# A leading wake-word fragment Whisper often keeps ("Harvis, what's…"). Stripped
+# before routing so it doesn't pollute the command. Only ever at the very start.
+_WAKE_TAIL = re.compile(
+    r"^\s*(hey\s+|hi\s+|okay\s+|ok\s+)?"
+    r"(jarvis|jarvitz|jervis|arvis|harvis|ernest|earnest|honest)\b[\s,.:!-]*",
+    re.IGNORECASE,
+)
+# Spoken yes/no for confirming a write. Checked as whole words; NO wins ties.
+_YES = ("yes", "yeah", "yep", "yup", "sure", "confirm", "confirmed", "do it",
+        "go ahead", "book it", "please do", "affirmative", "correct",
+        "sounds good", "okay", "ok", "add it", "please")
+_NO = ("no", "nope", "nah", "cancel", "don't", "dont", "drop it", "forget it",
+       "negative", "stop", "never mind", "nevermind", "scratch that")
 
-# ── dispatch: map a routed intent to spoken text ─────────────────────────────
+
+def _strip_wake(text: str) -> str:
+    cleaned = _WAKE_TAIL.sub("", text, count=1).strip()
+    return cleaned or text  # never blank out a command that was only the wake word
+
+
+def _yesno(text: str) -> str | None:
+    low = text.strip().lower().rstrip(".!?")
+    if any(re.search(rf"\b{re.escape(w)}\b", low) for w in _NO):
+        return "no"
+    if any(re.search(rf"\b{re.escape(w)}\b", low) for w in _YES):
+        return "yes"
+    return None
+
+
+# ── conversational session: recent turns + a write awaiting a spoken yes/no ───
+
+@dataclass
+class _Session:
+    history: list = field(default_factory=list)  # recent (speaker, text) turns
+    pending: int | None = None                   # action id awaiting yes/no
+    pending_desc: str = ""                        # what we're confirming (for re-asks)
+
+    def add(self, speaker: str, text: str) -> None:
+        self.history.append((speaker, text))
+        del self.history[:-6]  # keep only the last few turns
+
+    def context(self) -> str:
+        return "\n".join(f"{who}: {what}" for who, what in self.history)
+
+
+# ── dispatch ─────────────────────────────────────────────────────────────────
 
 def respond(cfg: Config, command: str, arg: str) -> str:
-    """Run one routed intent and return what Ernest should say."""
-    # Imported here so the heavy Discord module loads only when we actually talk.
+    """Run one READ intent and return what Ernest should say. Writes are handled
+    upstream in _process (spoken confirm-gate), never here."""
     from ernest import bot
 
     if command == "help":
-        return ("You can ask me anything, ask what's on your calendar, tell me to "
-                "remember something, or say research and a topic. Creating events "
-                "and sending mail still go through Discord for approval.")
+        return ("You can ask me anything, ask what's on your calendar, add an event, "
+                "tell me to remember something, or say research and a topic.")
     if command == "remember":
         if not arg:
             return "What should I remember?"
@@ -77,22 +124,56 @@ def respond(cfg: Config, command: str, arg: str) -> str:
         return bot._research_sync(cfg, arg) if arg else "Give me a topic to research."
     if command == "chat":
         return bot._chat_sync(cfg, _VOICE_SESSION, arg)
-    # Write/send intents: acknowledged but not executed by voice in V0.
-    if command in ("event", "steer", "approve", "deny"):
-        return ("That one changes your accounts, so I've left it for Discord where "
-                "you can approve it. Ask me to do it there.")
+    if command == "steer":  # persistent priority rule — still via Discord for now
+        return "Changing how I prioritize email still goes through Discord — tell me there."
     return bot._ask_sync(cfg, arg)  # default: retrieval Q&A
 
 
-def handle_text(cfg: Config, text: str) -> str:
-    """Route a line of text through the same parser+router the bot uses."""
+def _process(cfg: Config, session: _Session, heard: str, speak) -> None:
+    """Handle one recognized (already wake-stripped) utterance. ``speak`` voices
+    each reply. Resolves a pending confirmation, gates writes, or answers reads."""
     from ernest import bot
 
-    command, arg = bot.route(text)
+    # 1) Resolving a write we already proposed?
+    if session.pending is not None:
+        verdict = _yesno(heard)
+        if verdict == "yes":
+            result = bot._decide_sync(cfg, str(session.pending), True)
+            session.pending = None
+            speak(result)
+        elif verdict == "no":
+            bot._decide_sync(cfg, str(session.pending), False)
+            session.pending = None
+            speak("Okay, I'll leave it.")
+        else:  # unclear — keep waiting
+            speak(f"{session.pending_desc} Yes or no?")
+        return
+
+    # 2) Route + classify, giving the router recent context so follow-ups resolve.
+    command, arg = bot.route(heard)
     if command == "chat":
-        command, arg = bot.classify(cfg, arg)
+        command, arg = bot.classify(cfg, arg, context=session.context())
     log_event("converse", "intent", {"command": command})
-    return respond(cfg, command, arg)
+    session.add("You", heard)
+
+    # 3) Writes → propose, then a spoken confirm-gate before anything happens.
+    if command == "event":
+        reply, action_id = bot._propose_event_sync(cfg, arg)
+        if action_id is None:
+            speak(reply)  # couldn't parse or no calendar access — just say why
+            return
+        prompt = reply.split("\n", 1)[0]  # first line: "I'd add "X" on WHEN."
+        session.pending, session.pending_desc = action_id, prompt
+        speak(f"{prompt} Should I put it on your calendar?")
+        return
+    if command in ("approve", "deny"):
+        speak(bot._decide_sync(cfg, arg, command == "approve"))
+        return
+
+    # 4) Reads.
+    answer = respond(cfg, command, arg)
+    session.add("Ernest", answer)
+    speak(answer)
 
 
 # ── audio in / out ───────────────────────────────────────────────────────────
@@ -152,10 +233,12 @@ def _load_wakeword(cfg: Config):
         print("Wake word needs: pip install openwakeword onnxruntime webrtcvad",
               file=sys.stderr)
         raise SystemExit(2)
-    try:  # bundled models download once; a path to a custom .onnx is used as-is
-        openwakeword.utils.download_models([cfg.wake_model])
-    except Exception:
-        pass  # already present, or a custom path — Model() will report a real error
+    is_path = ("/" in cfg.wake_model or cfg.wake_model.endswith((".onnx", ".tflite")))
+    if not is_path:  # a bundled model name — fetch its weights once
+        try:
+            openwakeword.utils.download_models([cfg.wake_model])
+        except Exception:
+            pass  # already present; Model() will report a real error if not
     return Model(wakeword_models=[cfg.wake_model], inference_framework="onnx")
 
 
@@ -198,7 +281,7 @@ def _capture_utterance(cfg: Config, q, out_path: Path, seed: list | None = None)
     return True
 
 
-def _wake_loop(cfg: Config, workdir: Path, debug: bool = False) -> None:
+def _wake_loop(cfg: Config, workdir: Path, session: _Session, debug: bool = False) -> None:
     """Listen continuously; on the wake word, capture a command and answer it."""
     import queue
 
@@ -245,36 +328,55 @@ def _wake_loop(cfg: Config, workdir: Path, debug: bool = False) -> None:
             preroll.clear()
             wav = workdir / "utter.wav"
             if _capture_utterance(cfg, q, wav, seed=seed):
-                _handle_utterance(cfg, wav, workdir)
+                _handle_utterance(cfg, wav, workdir, session)
+                # If a write is awaiting yes/no, listen right away — no wake word.
+                tries = 0
+                while session.pending is not None and tries < 3:
+                    tries += 1
+                    subprocess.Popen(["afplay", cfg.wake_ack_sound])
+                    while not q.empty():
+                        q.get_nowait()
+                    if not _capture_utterance(cfg, q, wav):
+                        break
+                    _handle_utterance(cfg, wav, workdir, session)
+                if session.pending is not None:  # gave up waiting for a clear answer
+                    session.pending = None
+                    _speak(cfg, "I'll leave that for now.", workdir)
             else:
                 print("(didn't catch a command)")
+            oww.reset()
+            buf = np.empty(0, dtype="int16")
+            preroll.clear()
             print(f"\nListening for '{cfg.wake_model}'…")
 
 
 # ── entrypoints ──────────────────────────────────────────────────────────────
 
-def _handle_utterance(cfg: Config, wav: Path, workdir: Path) -> bool:
-    """Transcribe one captured clip, respond, and speak. False = caller should stop."""
+def _handle_utterance(cfg: Config, wav: Path, workdir: Path, session: _Session) -> bool:
+    """Transcribe one captured clip and act on it. False = caller should stop."""
     heard = speech.transcribe(cfg, wav)
     if not heard:
         print("(couldn't make that out)")
         return True
     print(f"🗣️  {heard}")
-    if heard.strip().lower().rstrip(".!") in _BYES:
+    clean = _strip_wake(heard)
+    # A farewell only ends the loop when we're not mid-confirmation.
+    if session.pending is None and clean.strip().lower().rstrip(".!") in _BYES:
         _speak(cfg, "Talk soon.", workdir)
         return False
-    _speak(cfg, handle_text(cfg, heard), workdir)
+    _process(cfg, session, clean, lambda t: _speak(cfg, t, workdir))
     return True
 
 
-def _one_turn(cfg: Config, workdir: Path) -> bool:
+def _one_turn(cfg: Config, workdir: Path, session: _Session) -> bool:
     """Push-to-talk: capture → handle. Returns False to end the loop."""
-    input("\nPress Enter to talk (Ctrl-C to quit)… ")
+    prompt = "Yes or no?… " if session.pending is not None else "Press Enter to talk (Ctrl-C to quit)… "
+    input(f"\n{prompt}")
     wav = workdir / "turn.wav"
     if not _record_wav(wav):
         print("(heard nothing)")
         return True
-    return _handle_utterance(cfg, wav, workdir)
+    return _handle_utterance(cfg, wav, workdir, session)
 
 
 def main() -> None:
@@ -289,23 +391,24 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load()
+    session = _Session()
     with tempfile.TemporaryDirectory(prefix="ernest-voice-") as tmp:
         workdir = Path(tmp)
         if args.say is not None:
             _speak(cfg, args.say, workdir)
             return
         if args.text is not None:
-            _speak(cfg, handle_text(cfg, args.text), workdir)
+            _process(cfg, session, _strip_wake(args.text), lambda t: _speak(cfg, t, workdir))
             return
         if args.wake:
             try:
-                _wake_loop(cfg, workdir, debug=args.debug)
+                _wake_loop(cfg, workdir, session, debug=args.debug)
             except (KeyboardInterrupt, EOFError):
                 print("\nStopped.")
             return
         print("Ernest is listening. Say 'goodbye' to stop.")
         try:
-            while _one_turn(cfg, workdir):
+            while _one_turn(cfg, workdir, session):
                 if args.once:
                     break
         except (KeyboardInterrupt, EOFError):
