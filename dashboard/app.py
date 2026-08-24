@@ -237,6 +237,7 @@ Present here: {tokens_present}</p>
 <dt>OpenAI key</dt><dd>{status_pill("OPENAI_API_KEY")}</dd>
 <dt>Discord</dt><dd>{status_pill("ERNEST_DISCORD_TOKEN")} {status_pill("ERNEST_DISCORD_USER_ID")}</dd>
 <dt>Canvas</dt><dd>{status_pill("CANVAS_TOKEN")}</dd>
+<dt>Voice (ElevenLabs)</dt><dd>{status_pill("ELEVENLABS_API_KEY")}</dd>
 <dt>Library</dt><dd><span class="pill">{lib if lib is not None else "—"} chunks</span></dd>
 </dl>
 <h2 style="margin-top:1.2rem">Try a job (dry-run)</h2>

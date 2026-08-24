@@ -45,6 +45,21 @@ FIELDS: list[tuple[str, str, str, bool, str]] = [
     ("ERNEST_RESEARCH_BUDGET_USD", "Research budget (USD/run)", "Research", False, "5"),
     ("ERNEST_LAT", "Latitude (weather)", "Weather", False, "30.27"),
     ("ERNEST_LON", "Longitude (weather)", "Weather", False, "-97.74"),
+    # Spoken voice (the puck / jobs.converse)
+    ("ELEVENLABS_API_KEY", "ElevenLabs API key", "Voice", True, "sk_… (enables the good voice)"),
+    ("ERNEST_TTS_PROVIDER", "TTS provider", "Voice", False, "elevenlabs  or  openai"),
+    ("ERNEST_ELEVEN_VOICE_ID", "ElevenLabs voice ID", "Voice", False, "pNInz6obpgDQGcFmaJgB (Adam)"),
+    ("ERNEST_ELEVEN_MODEL", "ElevenLabs model", "Voice", False, "eleven_turbo_v2_5 / eleven_multilingual_v2"),
+    ("ERNEST_ELEVEN_STABILITY", "ElevenLabs stability (0–1, lower = livelier)", "Voice", False, "0.4"),
+    ("ERNEST_ELEVEN_SIMILARITY", "ElevenLabs similarity (0–1)", "Voice", False, "0.75"),
+    ("ERNEST_ELEVEN_STYLE", "ElevenLabs style (0–1, higher = more emotive)", "Voice", False, "0.35"),
+    ("ERNEST_ELEVEN_SPEAKER_BOOST", "ElevenLabs speaker boost (1 on / 0 off)", "Voice", False, "1"),
+    ("ERNEST_TTS_VOICE", "OpenAI voice (fallback provider)", "Voice", False, "onyx / ash / verse / sage"),
+    ("ERNEST_TTS_INSTRUCTIONS", "OpenAI delivery direction", "Voice", False,
+     "warm butler, dry wit, natural pacing"),
+    ("ERNEST_STT_LANGUAGE", "Speech language (blank = auto-detect)", "Voice", False, "en"),
+    ("ERNEST_WAKE_MODEL", "Wake word (bundled name or .onnx path)", "Voice", False, "hey_jarvis"),
+    ("ERNEST_WAKE_THRESHOLD", "Wake sensitivity (0–1, raise if false-triggers)", "Voice", False, "0.5"),
 ]
 
 _LINE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$")
