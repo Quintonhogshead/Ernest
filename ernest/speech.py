@@ -53,10 +53,15 @@ def synthesize(cfg: Config, text: str, out_path: str | Path) -> Path:
 
 def _synthesize_openai(cfg: Config, text: str, out: Path) -> None:
     client = _openai(cfg)
+    kwargs = {}
+    # The instructions param steers tone/pacing on gpt-4o TTS; tts-1 rejects it.
+    if cfg.tts_instructions and cfg.tts_model.startswith("gpt-4o"):
+        kwargs["instructions"] = cfg.tts_instructions
     with client.audio.speech.with_streaming_response.create(
         model=cfg.tts_model,
         voice=cfg.tts_voice,
         input=text,
+        **kwargs,
     ) as resp:
         resp.stream_to_file(out)
 

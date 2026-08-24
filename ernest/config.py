@@ -89,6 +89,14 @@ class Config:
     # OpenAI TTS
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "onyx"  # any OpenAI voice name
+    # Delivery direction for gpt-4o-mini-tts (ignored by older tts-1). This is the
+    # single biggest lever on how robotic it sounds.
+    tts_instructions: str = (
+        "Speak like a warm, unflappable personal butler with dry wit — think "
+        "JARVIS. Natural, conversational pacing with real sentence rhythm; not "
+        "rushed, not flat. Land the ends of sentences softly. Never sound robotic "
+        "or like a news announcer."
+    )
     # ElevenLabs TTS (better voices; used when tts_provider="elevenlabs")
     eleven_api_key: str | None = None
     eleven_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # "Adam" (prebuilt); override to taste
@@ -165,6 +173,7 @@ def load() -> Config:
         or ("elevenlabs" if g("ELEVENLABS_API_KEY") else "openai"),
         tts_model=g("ERNEST_TTS_MODEL") or "gpt-4o-mini-tts",
         tts_voice=g("ERNEST_TTS_VOICE") or "onyx",
+        tts_instructions=g("ERNEST_TTS_INSTRUCTIONS") or Config.tts_instructions,
         eleven_api_key=g("ELEVENLABS_API_KEY") or None,
         eleven_voice_id=g("ERNEST_ELEVEN_VOICE_ID") or "pNInz6obpgDQGcFmaJgB",
         eleven_model=g("ERNEST_ELEVEN_MODEL") or "eleven_turbo_v2_5",
