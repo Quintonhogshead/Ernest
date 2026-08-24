@@ -82,6 +82,16 @@ class Config:
     # voice: LLM composes user-facing messages as plain English (else raw templates)
     voice: bool = True
     voice_model: str | None = None  # falls back to triage_model when unset
+    # spoken speech (the voice puck)
+    tts_provider: str = "openai"  # "openai" or "elevenlabs"
+    stt_model: str = "whisper-1"
+    # OpenAI TTS
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "onyx"  # any OpenAI voice name
+    # ElevenLabs TTS (better voices; used when tts_provider="elevenlabs")
+    eleven_api_key: str | None = None
+    eleven_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # "Adam" (prebuilt); override to taste
+    eleven_model: str = "eleven_turbo_v2_5"  # low-latency; eleven_multilingual_v2 = richer
     # kill switch
     paused: bool = False
 
@@ -141,6 +151,15 @@ def load() -> Config:
         lon=g("ERNEST_LON") or None,
         voice=(g("ERNEST_VOICE") or "1") != "0",
         voice_model=g("ERNEST_VOICE_MODEL") or None,
+        stt_model=g("ERNEST_STT_MODEL") or "whisper-1",
+        # Default to ElevenLabs the moment a key is present — that's the intent.
+        tts_provider=g("ERNEST_TTS_PROVIDER")
+        or ("elevenlabs" if g("ELEVENLABS_API_KEY") else "openai"),
+        tts_model=g("ERNEST_TTS_MODEL") or "gpt-4o-mini-tts",
+        tts_voice=g("ERNEST_TTS_VOICE") or "onyx",
+        eleven_api_key=g("ELEVENLABS_API_KEY") or None,
+        eleven_voice_id=g("ERNEST_ELEVEN_VOICE_ID") or "pNInz6obpgDQGcFmaJgB",
+        eleven_model=g("ERNEST_ELEVEN_MODEL") or "eleven_turbo_v2_5",
         paused=bool(g("ERNEST_PAUSED")),
     )
 

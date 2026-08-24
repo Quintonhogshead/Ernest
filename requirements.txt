@@ -13,5 +13,9 @@ discord.py>=2.3
 psycopg[binary]>=3.1
 pgvector>=0.3
 
+# Voice puck (local mic loop — jobs.converse; not needed on the Fly image):
+# sounddevice>=0.4
+# numpy>=1.26
+
 # Dev only:
 # pytest>=8.0
