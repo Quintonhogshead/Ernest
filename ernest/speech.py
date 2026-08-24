@@ -78,7 +78,12 @@ def _synthesize_elevenlabs(cfg: Config, text: str, out: Path) -> None:
         json={
             "text": text,
             "model_id": cfg.eleven_model,
-            "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+            "voice_settings": {
+                "stability": cfg.eleven_stability,
+                "similarity_boost": cfg.eleven_similarity,
+                "style": cfg.eleven_style,
+                "use_speaker_boost": cfg.eleven_speaker_boost,
+            },
         },
         timeout=60,
     )
