@@ -70,6 +70,38 @@ def _strip_wake(text: str) -> str:
     return cleaned or text  # never blank out a command that was only the wake word
 
 
+# ISO date / datetime that sounds terrible read aloud ("2026-09-05", "…T13:00").
+_ISO_DT = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?\b")
+_MONTHS = ("January", "February", "March", "April", "May", "June", "July",
+           "August", "September", "October", "November", "December")
+
+
+def _ordinal(day: int) -> str:
+    if 11 <= day % 100 <= 13:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    return f"{day}{suffix}"
+
+
+def _humanize_dates(text: str) -> str:
+    """Rewrite ISO dates/times to spoken English: 2026-09-05T13:00 -> September 5th,
+    2026 at 1 PM. Leaves anything it can't parse untouched."""
+    def repl(m: "re.Match") -> str:
+        y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if not (1 <= mo <= 12 and 1 <= d <= 31):
+            return m.group(0)
+        out = f"{_MONTHS[mo - 1]} {_ordinal(d)}, {y}"
+        if m.group(4) is not None:
+            h, mi = int(m.group(4)), int(m.group(5))
+            period = "AM" if h < 12 else "PM"
+            h12 = h % 12 or 12
+            clock = f"{h12}" if mi == 0 else f"{h12}:{mi:02d}"
+            out += f" at {clock} {period}"
+        return out
+    return _ISO_DT.sub(repl, text)
+
+
 def _yesno(text: str) -> str | None:
     low = text.strip().lower().rstrip(".!?")
     if any(re.search(rf"\b{re.escape(w)}\b", low) for w in _NO):
@@ -205,6 +237,7 @@ def _record_wav(out_path: Path) -> bool:
 
 def _speak(cfg: Config, text: str, workdir: Path) -> None:
     """Synthesize and play ``text`` (best effort — never crash the loop on audio)."""
+    text = _humanize_dates(text)  # "2026-09-05T13:00" -> "September 5th, 2026 at 1 PM"
     print(f"\n🤖 {text}\n")
     try:
         mp3 = speech.synthesize(cfg, text, workdir / "reply.mp3")
