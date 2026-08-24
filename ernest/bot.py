@@ -247,13 +247,19 @@ _ROUTER_SYSTEM = (
 )
 
 
-def classify(cfg: Config, text: str) -> tuple[str, str]:
+def classify(cfg: Config, text: str, context: str = "") -> tuple[str, str]:
     """LLM intent router for free-form messages. Falls back to ('chat', text)
-    on any error so a classifier hiccup never breaks the conversation."""
+    on any error so a classifier hiccup never breaks the conversation.
+
+    ``context`` is optional recent-conversation text (used by the voice loop) so
+    follow-ups like "add it" or "make it 4pm" resolve against what was just said.
+    """
     from ernest.llm import complete_json
 
+    user = f"Recent conversation (for context only):\n{context}\n\nClassify: {text}" \
+        if context else text
     try:
-        out = complete_json(cfg, cfg.triage_model, _ROUTER_SYSTEM, text,
+        out = complete_json(cfg, cfg.triage_model, _ROUTER_SYSTEM, user,
                             _INTENT_SCHEMA, max_tokens=120)
         intent = out.get("intent", "chat")
         if intent not in _INTENTS:

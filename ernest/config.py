@@ -82,6 +82,37 @@ class Config:
     # voice: LLM composes user-facing messages as plain English (else raw templates)
     voice: bool = True
     voice_model: str | None = None  # falls back to triage_model when unset
+    # spoken speech (the voice puck)
+    tts_provider: str = "openai"  # "openai" or "elevenlabs"
+    stt_model: str = "whisper-1"
+    stt_language: str = "en"  # pin STT language (ISO-639-1); "" = auto-detect
+    # OpenAI TTS
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "onyx"  # any OpenAI voice name
+    # Delivery direction for gpt-4o-mini-tts (ignored by older tts-1). This is the
+    # single biggest lever on how robotic it sounds.
+    tts_instructions: str = (
+        "Speak like a warm, unflappable personal butler with dry wit — think "
+        "JARVIS. Natural, conversational pacing with real sentence rhythm; not "
+        "rushed, not flat. Land the ends of sentences softly. Never sound robotic "
+        "or like a news announcer."
+    )
+    # ElevenLabs TTS (better voices; used when tts_provider="elevenlabs")
+    eleven_api_key: str | None = None
+    eleven_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # "Adam" (prebuilt); override to taste
+    eleven_model: str = "eleven_turbo_v2_5"  # low-latency; eleven_multilingual_v2 = richer
+    # Voice settings (0–1). Lower stability = more expressive/varied; style adds
+    # expressiveness (costs a little latency); speaker_boost sharpens the timbre.
+    eleven_stability: float = 0.4
+    eleven_similarity: float = 0.75
+    eleven_style: float = 0.35
+    eleven_speaker_boost: bool = True
+    # Wake word (hands-free loop): a local openWakeWord model, no cloud until triggered.
+    # "hey_jarvis" is a bundled model that fits the persona; a custom "Hey Ernest"
+    # model can be trained and dropped in later (set to its .onnx path).
+    wake_model: str = "hey_jarvis"
+    wake_threshold: float = 0.5  # detection confidence 0–1; raise if it false-triggers
+    wake_ack_sound: str = "/System/Library/Sounds/Pop.aiff"  # instant chime on wake
     # kill switch
     paused: bool = False
 
@@ -141,6 +172,24 @@ def load() -> Config:
         lon=g("ERNEST_LON") or None,
         voice=(g("ERNEST_VOICE") or "1") != "0",
         voice_model=g("ERNEST_VOICE_MODEL") or None,
+        stt_model=g("ERNEST_STT_MODEL") or "whisper-1",
+        stt_language=g("ERNEST_STT_LANGUAGE") if g("ERNEST_STT_LANGUAGE") is not None else "en",
+        # Default to ElevenLabs the moment a key is present — that's the intent.
+        tts_provider=g("ERNEST_TTS_PROVIDER")
+        or ("elevenlabs" if g("ELEVENLABS_API_KEY") else "openai"),
+        tts_model=g("ERNEST_TTS_MODEL") or "gpt-4o-mini-tts",
+        tts_voice=g("ERNEST_TTS_VOICE") or "onyx",
+        tts_instructions=g("ERNEST_TTS_INSTRUCTIONS") or Config.tts_instructions,
+        eleven_api_key=g("ELEVENLABS_API_KEY") or None,
+        eleven_voice_id=g("ERNEST_ELEVEN_VOICE_ID") or "pNInz6obpgDQGcFmaJgB",
+        eleven_model=g("ERNEST_ELEVEN_MODEL") or "eleven_turbo_v2_5",
+        eleven_stability=float(g("ERNEST_ELEVEN_STABILITY") or "0.4"),
+        eleven_similarity=float(g("ERNEST_ELEVEN_SIMILARITY") or "0.75"),
+        eleven_style=float(g("ERNEST_ELEVEN_STYLE") or "0.35"),
+        eleven_speaker_boost=(g("ERNEST_ELEVEN_SPEAKER_BOOST") or "1") != "0",
+        wake_model=g("ERNEST_WAKE_MODEL") or "hey_jarvis",
+        wake_threshold=float(g("ERNEST_WAKE_THRESHOLD") or "0.5"),
+        wake_ack_sound=g("ERNEST_WAKE_ACK_SOUND") or "/System/Library/Sounds/Pop.aiff",
         paused=bool(g("ERNEST_PAUSED")),
     )
 
