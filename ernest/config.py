@@ -92,6 +92,12 @@ class Config:
     eleven_api_key: str | None = None
     eleven_voice_id: str = "pNInz6obpgDQGcFmaJgB"  # "Adam" (prebuilt); override to taste
     eleven_model: str = "eleven_turbo_v2_5"  # low-latency; eleven_multilingual_v2 = richer
+    # Wake word (hands-free loop): a local openWakeWord model, no cloud until triggered.
+    # "hey_jarvis" is a bundled model that fits the persona; a custom "Hey Ernest"
+    # model can be trained and dropped in later (set to its .onnx path).
+    wake_model: str = "hey_jarvis"
+    wake_threshold: float = 0.5  # detection confidence 0–1; raise if it false-triggers
+    wake_ack_sound: str = "/System/Library/Sounds/Pop.aiff"  # instant chime on wake
     # kill switch
     paused: bool = False
 
@@ -160,6 +166,9 @@ def load() -> Config:
         eleven_api_key=g("ELEVENLABS_API_KEY") or None,
         eleven_voice_id=g("ERNEST_ELEVEN_VOICE_ID") or "pNInz6obpgDQGcFmaJgB",
         eleven_model=g("ERNEST_ELEVEN_MODEL") or "eleven_turbo_v2_5",
+        wake_model=g("ERNEST_WAKE_MODEL") or "hey_jarvis",
+        wake_threshold=float(g("ERNEST_WAKE_THRESHOLD") or "0.5"),
+        wake_ack_sound=g("ERNEST_WAKE_ACK_SOUND") or "/System/Library/Sounds/Pop.aiff",
         paused=bool(g("ERNEST_PAUSED")),
     )
 

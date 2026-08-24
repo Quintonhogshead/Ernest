@@ -15,13 +15,16 @@ are NOT executed by voice yet — Ernest says so and points you at Discord, so t
 approval discipline the text bot enforces isn't bypassed by talking.
 
 Usage:
+    python -m jobs.converse --wake          # hands-free: "hey jarvis" then a command
     python -m jobs.converse                 # interactive push-to-talk loop
     python -m jobs.converse --once          # a single turn, then exit
     python -m jobs.converse --text "what's on my calendar tomorrow"   # skip the mic
     python -m jobs.converse --say "hello"   # TTS smoke test only
 
-Needs a mic and, for playback, macOS `afplay`. Audio capture uses sounddevice:
-    pip install sounddevice numpy
+Needs a mic and, for playback, macOS `afplay`. Audio capture uses sounddevice;
+the wake word adds openWakeWord + a VAD endpointer:
+    pip install sounddevice numpy                 # push-to-talk
+    pip install openwakeword onnxruntime webrtcvad # hands-free (--wake)
 """
 
 from __future__ import annotations
@@ -129,15 +132,110 @@ def _speak(cfg: Config, text: str, workdir: Path) -> None:
         log_event("converse", "speak_failed", {"error": str(exc)})
 
 
+# ── hands-free: wake word + voice-activity endpointing ───────────────────────
+
+_FRAME_MS = 20
+_FRAME = _SAMPLE_RATE * _FRAME_MS // 1000  # 320 samples @16k = one 20ms frame
+_OWW_CHUNK = 1280  # openWakeWord wants 80ms (4 frames) per predict
+_END_SILENCE_MS = 800  # trailing silence that ends an utterance
+_LEAD_TIMEOUT_MS = 3000  # give up if no speech starts after the wake word
+_MAX_UTTERANCE_MS = 15_000
+
+
+def _load_wakeword(cfg: Config):
+    """Build the openWakeWord model, downloading the bundled weights on first run."""
+    try:
+        import openwakeword
+        from openwakeword.model import Model
+    except ImportError:
+        print("Wake word needs: pip install openwakeword onnxruntime webrtcvad",
+              file=sys.stderr)
+        raise SystemExit(2)
+    try:  # bundled models download once; a path to a custom .onnx is used as-is
+        openwakeword.utils.download_models([cfg.wake_model])
+    except Exception:
+        pass  # already present, or a custom path — Model() will report a real error
+    return Model(wakeword_models=[cfg.wake_model], inference_framework="onnx")
+
+
+def _capture_utterance(cfg: Config, q, out_path: Path) -> bool:
+    """After a wake, pull frames until trailing silence; write a WAV. False if silent."""
+    import numpy as np
+    import webrtcvad
+
+    vad = webrtcvad.Vad(2)
+    frames: list = []
+    started = False
+    silent_ms = lead_ms = 0
+    while len(frames) * _FRAME_MS < _MAX_UTTERANCE_MS:
+        frame = q.get().reshape(-1)
+        speech_here = vad.is_speech(frame.tobytes(), _SAMPLE_RATE)
+        if speech_here:
+            started, silent_ms = True, 0
+            frames.append(frame)
+        elif started:
+            silent_ms += _FRAME_MS
+            frames.append(frame)
+            if silent_ms >= _END_SILENCE_MS:
+                break
+        else:  # still waiting for the user to start talking
+            lead_ms += _FRAME_MS
+            if lead_ms >= _LEAD_TIMEOUT_MS:
+                return False
+    if not started:
+        return False
+    audio = np.concatenate(frames, axis=0)
+    with wave.open(str(out_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(_SAMPLE_RATE)
+        wf.writeframes(audio.tobytes())
+    return True
+
+
+def _wake_loop(cfg: Config, workdir: Path) -> None:
+    """Listen continuously; on the wake word, capture a command and answer it."""
+    import queue
+
+    import numpy as np
+    import sounddevice as sd
+
+    oww = _load_wakeword(cfg)
+    q: "queue.Queue" = queue.Queue()
+    stream = sd.InputStream(
+        samplerate=_SAMPLE_RATE, channels=1, dtype="int16", blocksize=_FRAME,
+        callback=lambda data, *_: q.put(data.copy()),
+    )
+    buf = np.empty(0, dtype="int16")
+    print(f"Listening for the wake word ('{cfg.wake_model}'). Ctrl-C to stop.")
+    with stream:
+        while True:
+            buf = np.concatenate([buf, q.get().reshape(-1)])
+            if len(buf) < _OWW_CHUNK:
+                continue
+            chunk, buf = buf[:_OWW_CHUNK], buf[_OWW_CHUNK:]
+            score = max(oww.predict(chunk).values())
+            if score < cfg.wake_threshold:
+                continue
+            # Triggered: chime, drain any buffered audio, then capture the command.
+            log_event("converse", "wake", {"score": round(score, 3)})
+            subprocess.run(["afplay", cfg.wake_ack_sound], check=False)
+            oww.reset()
+            buf = np.empty(0, dtype="int16")
+            while not q.empty():
+                q.get_nowait()
+            wav = workdir / "utter.wav"
+            if _capture_utterance(cfg, q, wav):
+                _handle_utterance(cfg, wav, workdir)
+            else:
+                print("(didn't catch a command)")
+            print(f"\nListening for '{cfg.wake_model}'…")
+
+
 # ── entrypoints ──────────────────────────────────────────────────────────────
 
-def _one_turn(cfg: Config, workdir: Path) -> bool:
-    """Capture → transcribe → respond → speak. Returns False to end the loop."""
-    input("\nPress Enter to talk (Ctrl-C to quit)… ")
-    wav = workdir / "turn.wav"
-    if not _record_wav(wav):
-        print("(heard nothing)")
-        return True
+def _handle_utterance(cfg: Config, wav: Path, workdir: Path) -> bool:
+    """Transcribe one captured clip, respond, and speak. False = caller should stop."""
     heard = speech.transcribe(cfg, wav)
     if not heard:
         print("(couldn't make that out)")
@@ -150,8 +248,20 @@ def _one_turn(cfg: Config, workdir: Path) -> bool:
     return True
 
 
+def _one_turn(cfg: Config, workdir: Path) -> bool:
+    """Push-to-talk: capture → handle. Returns False to end the loop."""
+    input("\nPress Enter to talk (Ctrl-C to quit)… ")
+    wav = workdir / "turn.wav"
+    if not _record_wav(wav):
+        print("(heard nothing)")
+        return True
+    return _handle_utterance(cfg, wav, workdir)
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Talk to Ernest (voice V0).")
+    parser = argparse.ArgumentParser(description="Talk to Ernest (voice).")
+    parser.add_argument("--wake", action="store_true",
+                        help="hands-free: listen for the wake word continuously")
     parser.add_argument("--once", action="store_true", help="one turn, then exit")
     parser.add_argument("--text", help="skip the mic; route this text and speak the reply")
     parser.add_argument("--say", help="TTS smoke test: just speak this text")
@@ -165,6 +275,12 @@ def main() -> None:
             return
         if args.text is not None:
             _speak(cfg, handle_text(cfg, args.text), workdir)
+            return
+        if args.wake:
+            try:
+                _wake_loop(cfg, workdir)
+            except (KeyboardInterrupt, EOFError):
+                print("\nStopped.")
             return
         print("Ernest is listening. Say 'goodbye' to stop.")
         try:

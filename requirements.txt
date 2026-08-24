@@ -16,6 +16,9 @@ pgvector>=0.3
 # Voice puck (local mic loop — jobs.converse; not needed on the Fly image):
 # sounddevice>=0.4
 # numpy>=1.26
+# openwakeword>=0.6   # --wake hands-free trigger
+# onnxruntime>=1.17   # openWakeWord inference backend
+# webrtcvad>=2.0      # end-of-speech detection
 
 # Dev only:
 # pytest>=8.0
