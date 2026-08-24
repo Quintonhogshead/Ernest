@@ -140,6 +140,7 @@ _OWW_CHUNK = 1280  # openWakeWord wants 80ms (4 frames) per predict
 _END_SILENCE_MS = 800  # trailing silence that ends an utterance
 _LEAD_TIMEOUT_MS = 3000  # give up if no speech starts after the wake word
 _MAX_UTTERANCE_MS = 15_000
+_PREROLL_MS = 300  # audio kept from before the wake trigger, so onsets aren't clipped
 
 
 def _load_wakeword(cfg: Config):
@@ -158,13 +159,17 @@ def _load_wakeword(cfg: Config):
     return Model(wakeword_models=[cfg.wake_model], inference_framework="onnx")
 
 
-def _capture_utterance(cfg: Config, q, out_path: Path) -> bool:
-    """After a wake, pull frames until trailing silence; write a WAV. False if silent."""
+def _capture_utterance(cfg: Config, q, out_path: Path, seed: list | None = None) -> bool:
+    """After a wake, pull frames until trailing silence; write a WAV. False if silent.
+
+    ``seed`` is a short pre-roll of frames captured just before/around the wake
+    trigger, prepended so the onset of the command isn't clipped.
+    """
     import numpy as np
     import webrtcvad
 
-    vad = webrtcvad.Vad(2)
-    frames: list = []
+    vad = webrtcvad.Vad(1)  # least aggressive: keeps quiet onsets/consonants
+    frames: list = list(seed or [])
     started = False
     silent_ms = lead_ms = 0
     while len(frames) * _FRAME_MS < _MAX_UTTERANCE_MS:
@@ -193,12 +198,14 @@ def _capture_utterance(cfg: Config, q, out_path: Path) -> bool:
     return True
 
 
-def _wake_loop(cfg: Config, workdir: Path) -> None:
+def _wake_loop(cfg: Config, workdir: Path, debug: bool = False) -> None:
     """Listen continuously; on the wake word, capture a command and answer it."""
     import queue
 
     import numpy as np
     import sounddevice as sd
+
+    from collections import deque
 
     oww = _load_wakeword(cfg)
     q: "queue.Queue" = queue.Queue()
@@ -206,26 +213,38 @@ def _wake_loop(cfg: Config, workdir: Path) -> None:
         samplerate=_SAMPLE_RATE, channels=1, dtype="int16", blocksize=_FRAME,
         callback=lambda data, *_: q.put(data.copy()),
     )
-    buf = np.empty(0, dtype="int16")
+    dev = sd.query_devices(kind="input")
+    print(f"Input device: {dev['name']}")
     print(f"Listening for the wake word ('{cfg.wake_model}'). Ctrl-C to stop.")
+    if debug:
+        print("[debug] showing mic level (rms) and wake score — say the wake word.")
+    buf = np.empty(0, dtype="int16")
+    preroll: deque = deque(maxlen=_PREROLL_MS // _FRAME_MS)  # recent frames
     with stream:
         while True:
-            buf = np.concatenate([buf, q.get().reshape(-1)])
+            frame = q.get().reshape(-1)
+            preroll.append(frame)
+            buf = np.concatenate([buf, frame])
             if len(buf) < _OWW_CHUNK:
                 continue
             chunk, buf = buf[:_OWW_CHUNK], buf[_OWW_CHUNK:]
             score = max(oww.predict(chunk).values())
+            if debug:
+                rms = int(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
+                if rms > 150 or score > 0.05:  # only print when there's signal
+                    print(f"[debug] rms={rms:<6} score={score:.3f}")
             if score < cfg.wake_threshold:
                 continue
-            # Triggered: chime, drain any buffered audio, then capture the command.
-            log_event("converse", "wake", {"score": round(score, 3)})
-            subprocess.run(["afplay", cfg.wake_ack_sound], check=False)
+            # Triggered: chime (non-blocking so capture starts instantly) and
+            # capture the command, seeded with the pre-roll so its onset survives.
+            log_event("converse", "wake", {"score": round(float(score), 3)})
+            subprocess.Popen(["afplay", cfg.wake_ack_sound])
+            seed = list(preroll)
             oww.reset()
             buf = np.empty(0, dtype="int16")
-            while not q.empty():
-                q.get_nowait()
+            preroll.clear()
             wav = workdir / "utter.wav"
-            if _capture_utterance(cfg, q, wav):
+            if _capture_utterance(cfg, q, wav, seed=seed):
                 _handle_utterance(cfg, wav, workdir)
             else:
                 print("(didn't catch a command)")
@@ -262,6 +281,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Talk to Ernest (voice).")
     parser.add_argument("--wake", action="store_true",
                         help="hands-free: listen for the wake word continuously")
+    parser.add_argument("--debug", action="store_true",
+                        help="with --wake: print mic level and wake score live")
     parser.add_argument("--once", action="store_true", help="one turn, then exit")
     parser.add_argument("--text", help="skip the mic; route this text and speak the reply")
     parser.add_argument("--say", help="TTS smoke test: just speak this text")
@@ -278,7 +299,7 @@ def main() -> None:
             return
         if args.wake:
             try:
-                _wake_loop(cfg, workdir)
+                _wake_loop(cfg, workdir, debug=args.debug)
             except (KeyboardInterrupt, EOFError):
                 print("\nStopped.")
             return

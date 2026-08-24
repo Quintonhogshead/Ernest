@@ -85,6 +85,7 @@ class Config:
     # spoken speech (the voice puck)
     tts_provider: str = "openai"  # "openai" or "elevenlabs"
     stt_model: str = "whisper-1"
+    stt_language: str = "en"  # pin STT language (ISO-639-1); "" = auto-detect
     # OpenAI TTS
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "onyx"  # any OpenAI voice name
@@ -158,6 +159,7 @@ def load() -> Config:
         voice=(g("ERNEST_VOICE") or "1") != "0",
         voice_model=g("ERNEST_VOICE_MODEL") or None,
         stt_model=g("ERNEST_STT_MODEL") or "whisper-1",
+        stt_language=g("ERNEST_STT_LANGUAGE") if g("ERNEST_STT_LANGUAGE") is not None else "en",
         # Default to ElevenLabs the moment a key is present — that's the intent.
         tts_provider=g("ERNEST_TTS_PROVIDER")
         or ("elevenlabs" if g("ELEVENLABS_API_KEY") else "openai"),

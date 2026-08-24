@@ -25,11 +25,13 @@ from .llm import _openai
 def transcribe(cfg: Config, wav_path: str | Path) -> str:
     """Return the text of a spoken WAV clip, or "" if nothing was heard."""
     client = _openai(cfg)
+    kwargs = {"language": cfg.stt_language} if cfg.stt_language else {}
     with open(wav_path, "rb") as fh:
         resp = client.audio.transcriptions.create(
             model=cfg.stt_model,
             file=fh,
             response_format="text",
+            **kwargs,
         )
     # response_format="text" returns a bare string; guard for object shapes too.
     text = (resp if isinstance(resp, str) else getattr(resp, "text", "")).strip()
