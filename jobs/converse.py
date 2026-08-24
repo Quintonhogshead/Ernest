@@ -344,9 +344,13 @@ def _wake_loop(cfg: Config, workdir: Path, session: _Session, debug: bool = Fals
                     _speak(cfg, "I'll leave that for now.", workdir)
             else:
                 print("(didn't catch a command)")
+            # Discard everything captured during processing + playback (Ernest's
+            # own voice, the chime) so it can't re-trigger the wake word.
             oww.reset()
             buf = np.empty(0, dtype="int16")
             preroll.clear()
+            while not q.empty():
+                q.get_nowait()
             print(f"\nListening for '{cfg.wake_model}'…")
 
 
